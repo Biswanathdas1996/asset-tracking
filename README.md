@@ -29,8 +29,10 @@ All records are saved in your browser and revalued from the live market every ti
 | Data | Source |
 |---|---|
 | NSE/BSE live price, history and search | Yahoo Finance (`RELIANCE.NS`, `500325.BO` …) |
-| Crypto live INR price and search | CoinGecko |
-| Crypto price on an older purchase date | CoinGecko (last 365 days), Yahoo Finance `BTC-INR` beyond that |
+| Crypto live INR price | CoinDCX public API (INR market, or USDT market × USDT/INR); CoinGecko for coins not on CoinDCX |
+| Crypto search | CoinGecko |
+| Crypto value-over-time chart | CoinDCX daily candles; Yahoo Finance `<SYMBOL>-INR` for coins not on CoinDCX |
+| Crypto price on an older purchase date | CoinDCX daily candles; for coins not on CoinDCX, CoinGecko (last 365 days) then Yahoo Finance `BTC-INR` |
 | Gold rate | COMEX gold (`GC=F`, USD/oz) × USD/INR ÷ 31.1035 g × (1 + import duty) |
 
 No API keys are required.
@@ -70,7 +72,8 @@ npm test
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORT` | `4000` | HTTP port (your saved data belongs to this address; changing it starts empty) |
-| `PRICE_CACHE_SECONDS` | `60` | How long a live price is reused |
+| `PRICE_CACHE_SECONDS` | `60` | How long a live stock/gold price is reused |
+| `CRYPTO_PRICE_CACHE_SECONDS` | `10` | How long the CoinDCX crypto ticker is reused |
 | `GOLD_IMPORT_DUTY_PCT` | `6` | Duty added to the international gold rate |
 | `COINGECKO_API_KEY` | – | Optional CoinGecko demo key for higher limits |
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as yahoo from '../services/yahoo.js';
 import * as coingecko from '../services/coingecko.js';
+import * as crypto from '../services/crypto.js';
 import * as gold from '../services/gold.js';
 import { asyncRoute, BadRequest, normalizeStockSymbol, pastOrTodayDate } from './util.js';
 
@@ -23,8 +24,9 @@ r.get('/quote/stock/:symbol', asyncRoute(async (req, res) => {
 }));
 
 r.get('/quote/crypto/:id', asyncRoute(async (req, res) => {
-  const out = { id: req.params.id, ...(await coingecko.getPriceInr(req.params.id)) };
-  if (req.query.date) out.onDate = await coingecko.getPriceOnDate({ id: req.params.id, symbol: req.query.symbol }, pastOrTodayDate(req.query.date, 'date'));
+  const coin = { id: req.params.id, symbol: req.query.symbol ? String(req.query.symbol) : undefined };
+  const out = { id: coin.id, ...(await crypto.getPriceInr(coin)) };
+  if (req.query.date) out.onDate = await crypto.getPriceOnDate(coin, pastOrTodayDate(req.query.date, 'date'));
   res.json(out);
 }));
 

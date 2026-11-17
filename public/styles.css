@@ -364,56 +364,37 @@ main > * { min-width: 0; }
 .alloc-summary { display: none; }
 .alloc-bar { display: none; }
 
-.alloc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.alloc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .alloc-list li {
-  display: flex; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 12px; cursor: pointer;
-  border: 1px solid transparent; transition: background .15s, border-color .15s, opacity .2s;
+  display: flex; gap: 12px; align-items: center; padding: 11px 12px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  transition: background .15s, border-color .15s;
 }
 .alloc-list li:focus-visible { outline: none; box-shadow: var(--ring); }
-.alloc-list li.hot { background: color-mix(in srgb, var(--c) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c) 30%, transparent); }
-.focusing .alloc-list li:not(.hot) { opacity: .55; }
-.alloc-list li.none { cursor: default; opacity: .55; }
+@media (hover: hover) {
+  .alloc-list li:hover { border-color: color-mix(in srgb, var(--c) 40%, var(--border)); background: color-mix(in srgb, var(--c) 8%, var(--surface)); }
+}
+.alloc-list li.hot,
+.alloc-list li.active {
+  background: color-mix(in srgb, var(--c) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--c) 45%, var(--border));
+}
+.alloc-list li.active { box-shadow: inset 3px 0 0 var(--c); }
+.alloc-list li.none { cursor: default; opacity: .5; }
 .al-ic {
-  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none;
+  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: none;
   background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c);
 }
-.al-ic .i { width: 17px; height: 17px; }
-.al-main { flex: 1; min-width: 0; display: grid; gap: 5px; }
-.al-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.alloc-list .nm { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.alloc-list .pc { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 14px; }
-.alloc-list .pc small { font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 1px; }
-.al-meter { height: 5px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
-.al-meter span { display: block; height: 100%; border-radius: inherit; background: var(--c); transition: width .8s var(--ease); }
-.al-sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.al-pl { font-weight: 650; }
-.al-pl.gain { color: var(--gain); } .al-pl.loss { color: var(--loss); }
-
-/* ---------- category cards ---------- */
-.cat-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.cat {
-  position: relative; text-align: left; cursor: pointer; overflow: hidden;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  box-shadow: var(--shadow); padding: 18px 18px 16px; display: grid; gap: 10px;
-  transition: transform .2s var(--ease), box-shadow .2s, border-color .2s;
-}
-.cat::before {
-  content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--c); opacity: .9;
-}
-@media (hover: hover) { .cat:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--c) 40%, var(--border)); box-shadow: var(--shadow-lg); } }
-.cat.active { border-color: color-mix(in srgb, var(--c) 55%, var(--border)); }
-.cat-top { display: flex; align-items: center; gap: 10px; }
-.cat-ic {
-  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
-  background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c);
-}
-.cat-ic .i { width: 18px; height: 18px; }
-.cat-name { font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cat-count { font-size: 12px; color: var(--muted); margin-left: auto; white-space: nowrap; }
-.cat-value { font-size: 23px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.cat-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
-.bar { height: 4px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
-.bar > span { display: block; height: 100%; background: var(--c); border-radius: 4px; transition: width .8s var(--ease); }
+.al-ic .i { width: 18px; height: 18px; }
+.al-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.al-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.alloc-list .nm { font-weight: 650; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alloc-list .pc { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--c); }
+.alloc-list .pc small { font-size: 11px; font-weight: 650; margin-left: 1px; }
+.al-sub { font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.al-sub .vl { color: var(--text); font-weight: 700; font-size: 15px; letter-spacing: -.02em; }
+.al-sub .mini-chip { flex: none; }
+.al-meta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- holdings ---------- */
 .card.holdings { padding: 0; overflow: hidden; }
@@ -759,8 +740,8 @@ dialog form { display: grid; }
   body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   input, textarea, select, td, .hero-value, .toast, [contenteditable] { -webkit-user-select: text; user-select: text; }
   input, select, textarea, .field input, .field select, .search input { font-size: 16px !important; }
-  button, .tab, .cat, a { -webkit-touch-callout: none; }
-  button:active, .icon-btn:active, .tab:active, .cat:active { transform: scale(.97); transition: transform .08s; }
+  button, .tab, .alloc-list li, a { -webkit-touch-callout: none; }
+  button:active, .icon-btn:active, .tab:active, .alloc-list li:active { transform: scale(.97); transition: transform .08s; }
 }
 
 /* ---------- Holdings table becomes a card list on phones and tablets ----------
@@ -833,15 +814,9 @@ dialog form { display: grid; }
   .alloc-bar span.empty { flex-grow: 1; background: var(--surface-3); }
   .focusing .alloc-bar span:not(.hot) { opacity: .25; }
   .alloc-bar span.hot { transform: scaleY(1.35); }
-  .alloc-list { gap: 2px; margin: 0 -6px; }
-  .alloc-list li { padding: 10px 8px; }
-
-  .cat-cards { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  .cat { padding: 14px 16px; grid-template-columns: 1fr auto; align-items: center; gap: 6px 12px; }
-  .cat-top { grid-column: 1 / -1; }
-  .cat-value { font-size: 19px; }
-  .cat .bar { grid-column: 1 / -1; }
-  .cat-foot { justify-content: flex-end; }
+  .alloc-list { gap: 8px; }
+  .alloc-list li { padding: 10px 12px; }
+  .al-sub .vl { font-size: 14.5px; }
   .wide, .divider, .shortcuts, .search kbd { display: none; }
   [data-tip]::after { display: none; }
   .row { grid-template-columns: 1fr; }

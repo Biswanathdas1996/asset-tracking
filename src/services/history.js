@@ -1,4 +1,5 @@
 import * as yahoo from './yahoo.js';
+import * as coindcx from './coindcx.js';
 import * as gold from './gold.js';
 import { toDateKey, addDays, todayIST, closeOnOrBefore } from './dates.js';
 
@@ -6,8 +7,9 @@ const round = (n) => Math.round(n * 100) / 100;
 const MAX_DAYS = 1825; // up to 5 years of history
 const DAILY_DAYS = 400; // daily points for the most recent ~13 months, weekly before that
 
-/** Yahoo Finance symbol carrying a holding's daily INR closes. */
-const marketSymbol = (h) => (h.assetType === 'stock' ? h.symbol : h.symbol ? `${String(h.symbol).toUpperCase()}-INR` : null);
+/** Series key for a holding's daily INR closes: the Yahoo symbol for stocks, "crypto:<SYM>" for coins. */
+const CRYPTO = 'crypto:';
+const marketSymbol = (h) => (h.assetType === 'stock' ? h.symbol : h.symbol ? `${CRYPTO}${String(h.symbol).toUpperCase()}` : null);
 
 function sampleDates(from, to) {
   const dailyFrom = addDays(to, -DAILY_DAYS);
@@ -42,6 +44,17 @@ export async function portfolioHistory(holdings, sips) {
 
   const series = {};
   await Promise.all([...new Set(lots.map((l) => l.sym).filter(Boolean))].map(async (sym) => {
+    // Crypto: CoinDCX candles first, so history matches the CoinDCX live price; Yahoo "<SYM>-INR" as fallback
+    if (sym.startsWith(CRYPTO)) {
+      const coin = sym.slice(CRYPTO.length);
+      let dcxError = null;
+      try {
+        const s = await coindcx.getDailyCloses(coin, addDays(from, -10), today);
+        if (s) { series[sym] = s; return; }
+      } catch (e) { dcxError = e; }
+      try { series[sym] = await yahoo.getDailyCloses(`${coin}-INR`, addDays(from, -10), today); } catch (e) { errors.push(`${coin}: ${(dcxError || e).message}`); }
+      return;
+    }
     try { series[sym] = await yahoo.getDailyCloses(sym, addDays(from, -10), today); } catch (e) { errors.push(`${sym}: ${e.message}`); }
   }));
   let goldOn = null;

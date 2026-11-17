@@ -150,30 +150,15 @@ function renderHero(d) {
     ${day ? `<span class="sep"></span><span>Today <b class="${cls(day.change)}">${signed(day.change, inr0)} (${pct(day.percent)})</b></span>` : ''}`;
 }
 
-function renderCategories(s) {
-  const total = s.total.value || 0;
-  $('#summaryCards').innerHTML = KEYS.map((k) => {
-    const b = s[k], m = META[k];
-    const share = total ? (b.value / total) * 100 : 0;
-    const count = k === 'gold' ? `${b.count} SIP${b.count === 1 ? '' : 's'}` : `${b.count} holding${b.count === 1 ? '' : 's'}`;
-    return `<button class="cat ${state.tab === k ? 'active' : ''}" data-cat="${k}" style="--c:${m.color}">
-      <div class="cat-top"><span class="cat-ic">${icon(m.icon)}</span><span class="cat-name">${m.label}</span><span class="cat-count">${count}</span></div>
-      <div class="cat-value">${inr0.format(b.value)}</div>
-      <div class="cat-foot"><span>Invested ${inrC.format(b.invested)}</span><span class="mini-chip ${chipCls(b.pnl)}">${signed(b.pnl, inrC)} · ${pct(b.pnlPercent)}</span></div>
-      <div class="bar" title="${share.toFixed(1)}% of portfolio"><span style="width:${share}%"></span></div>
-    </button>`;
-  }).join('');
-  for (const k of KEYS) { const c = $(`[data-count="${k}"]`); if (c) c.textContent = s[k].count; }
+function holdingCount(k, n) {
+  return k === 'gold' ? `${n} SIP${n === 1 ? '' : 's'}` : `${n} holding${n === 1 ? '' : 's'}`;
 }
-
-let allocSel = null; // category picked by tap/click in the allocation card
 
 function renderAlloc(s, goldPrice) {
   const total = s.total.value || 0;
   const share = (k) => (total ? (s[k].value / total) * 100 : 0);
   const r = 60, C = 2 * Math.PI * r;
   const keys = KEYS.filter((k) => s[k].value > 0);
-  if (allocSel && !keys.includes(allocSel)) allocSel = null;
   const gap = keys.length > 1 ? 3 : 0;
   let off = 0;
   const arcs = keys.map((k) => {
@@ -189,54 +174,56 @@ function renderAlloc(s, goldPrice) {
     : '<span class="empty"></span>';
   $('#allocLegend').innerHTML = KEYS.map((k) => {
     const b = s[k], m = META[k], sh = share(k);
-    return `<li data-k="${k}" style="--c:${m.color}" role="button" tabindex="0" aria-pressed="false" ${b.value ? '' : 'class="none"'}>
+    const on = state.tab === k;
+    const classes = [on ? 'active' : '', b.value ? '' : 'none'].filter(Boolean).join(' ');
+    const meta = [holdingCount(k, b.count), b.invested ? `Invested ${inrC.format(b.invested)}` : ''].filter(Boolean).join(' · ');
+    return `<li data-k="${k}" style="--c:${m.color}" role="button" tabindex="0" aria-pressed="${on}"${classes ? ` class="${classes}"` : ''}>
       <span class="al-ic">${icon(m.icon)}</span>
       <span class="al-main">
         <span class="al-row"><span class="nm">${m.label}</span><span class="pc">${sh.toFixed(1)}<small>%</small></span></span>
-        <span class="al-meter"><span style="width:${sh.toFixed(2)}%"></span></span>
-        <span class="al-row al-sub"><span class="vl">${inr0.format(b.value)}</span>${b.invested ? `<span class="al-pl ${chipCls(b.pnl)}">${pct(b.pnlPercent)}</span>` : ''}</span>
+        <span class="al-row al-sub"><span class="vl">${inr0.format(b.value)}</span>${b.invested ? `<span class="mini-chip ${chipCls(b.pnl)}">${signed(b.pnl, inrC)} · ${pct(b.pnlPercent)}</span>` : ''}</span>
+        <span class="al-meta">${meta}</span>
       </span>
     </li>`;
   }).join('');
+  for (const k of KEYS) { const c = $(`[data-count="${k}"]`); if (c) c.textContent = s[k].count; }
   const gr = $('#goldRate');
   gr.hidden = !goldPrice;
   if (goldPrice) gr.innerHTML = `<span class="sw" style="width:8px;height:8px;border-radius:50%;background:var(--gold)"></span>24K ${inr0.format(goldPrice.pricePerGram)}/g`;
   allocData = { s, total };
-  highlightAlloc(allocSel);
+  paintAlloc(null);
 }
 
 let allocData = null;
-/** Emphasise one category across the donut, bar and list, and show its numbers in the summary. */
-function highlightAlloc(k) {
+/** Hover previews one slice in the donut and the phone summary. The headline stays the portfolio total. */
+function paintAlloc(hoverK) {
   if (!allocData) return;
   const { s, total } = allocData;
+  const k = hoverK && s[hoverK]?.value ? hoverK : null;
   const card = $('.alloc-card');
   card.classList.toggle('focusing', !!k);
-  $$('[data-k]', card).forEach((n) => {
-    n.classList.toggle('hot', n.dataset.k === k);
-    if (n.tagName === 'LI') n.setAttribute('aria-pressed', String(n.dataset.k === allocSel));
-  });
+  $$('[data-k]', card).forEach((n) => n.classList.toggle('hot', !!k && n.dataset.k === k));
   const b = k ? s[k] : s.total;
   const label = k ? META[k].label : total ? 'Total value' : 'No assets yet';
-  const share = k && total ? `${((b.value / total) * 100).toFixed(1)}% of portfolio` : `${KEYS.filter((x) => s[x].value > 0).length} asset classes`;
-  $('#donutCenter').innerHTML = `<span>${label}</span><b>${total ? inrC.format(b.value) : '₹0'}</b>${k ? `<em>${share}</em>` : ''}`;
+  const hint = k && total ? `${((b.value / total) * 100).toFixed(1)}% of portfolio` : '';
+  $('#donutCenter').innerHTML = `<span>${label}</span><b>${total ? inrC.format(b.value) : '₹0'}</b>${hint ? `<em>${hint}</em>` : ''}`;
   $('#allocSummary').innerHTML = `<div><span class="lbl">${label}</span><b>${inr0.format(b.value)}</b></div>
     ${total ? `<span class="mini-chip ${chipCls(b.pnl)}">${signed(b.pnl, inrC)} · ${pct(b.pnlPercent)}</span>` : ''}
-    <span class="alloc-hint">${share}</span>`;
+    ${hint ? `<span class="alloc-hint">${hint}</span>` : ''}`;
 }
 
 // Allocation interactions: hover previews, tap/click/Enter pins a category
 const allocCard = $('.alloc-card');
 allocCard.addEventListener('mouseover', (e) => {
   if (!matchMedia('(hover: hover)').matches) return;
-  highlightAlloc(e.target.closest('[data-k]')?.dataset.k || allocSel);
+  paintAlloc(e.target.closest('[data-k]')?.dataset.k || null);
 });
-allocCard.addEventListener('mouseleave', () => highlightAlloc(allocSel));
+allocCard.addEventListener('mouseleave', () => paintAlloc(null));
 const pickAlloc = (e) => {
   const n = e.target.closest('[data-k]');
   if (!n || n.classList.contains('none')) return;
-  allocSel = allocSel === n.dataset.k ? null : n.dataset.k;
-  highlightAlloc(allocSel);
+  setTab(n.dataset.k);
+  if (n.tagName === 'LI') $('.holdings').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
 };
 allocCard.addEventListener('click', pickAlloc);
 allocCard.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('li[data-k]')) { e.preventDefault(); pickAlloc(e); } });
@@ -386,7 +373,8 @@ function chartSeries() {
   return [...byDay].sort((a, b) => a[0].localeCompare(b[0])).map(([at, total]) => ({ at, total }));
 }
 
-const historyKey = (d) => `${today()}|${JSON.stringify([
+const HISTORY_VERSION = 2; // bump when the server's history source changes, to drop cached points
+const historyKey = (d) => `v${HISTORY_VERSION}|${today()}|${JSON.stringify([
   d.holdings.map((h) => [h._id, h.quantity, h.buyDate, h.investedValue]),
   d.goldSips.map((s) => [s._id, s.installmentCount, s.totalInvested]),
 ])}`;
@@ -572,7 +560,6 @@ function render() {
   state.data = buildView();
   const d = state.data;
   renderHero(d);
-  renderCategories(d.summary);
   renderAlloc(d.summary, d.goldPrice);
   renderTable();
   renderStatus();
@@ -827,15 +814,14 @@ function setTab(tab) {
   if (!KEYS.includes(tab)) return;
   state.tab = tab;
   try { localStorage.setItem('tab', state.tab); } catch { /* ignore */ }
+  $$('.alloc-list li').forEach((n) => {
+    const on = n.dataset.k === tab;
+    n.classList.toggle('active', on);
+    n.setAttribute('aria-pressed', String(on));
+  });
   renderTable();
 }
 $$('.tab').forEach((t) => t.addEventListener('click', () => setTab(t.dataset.tab)));
-$('#summaryCards').addEventListener('click', (e) => {
-  const c = e.target.closest('[data-cat]');
-  if (!c) return;
-  setTab(c.dataset.cat);
-  $('.holdings').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
-});
 $('#addBtn').addEventListener('click', () => openForm(state.tab));
 $('#refreshBtn').addEventListener('click', () => load(true));
 $('#filter').addEventListener('input', (e) => { state.q = e.target.value; renderTable(); });
@@ -984,7 +970,7 @@ function lockApp(message = '') {
   state.errors = [];
   chart = null;
   for (const d of $$('dialog[open]')) d.close();
-  for (const id of ['#summaryCards', '#donut', '#allocLegend', '#historyChart', '#chartLegend', '#tableWrap', '#alerts', '#heroMeta', '#toasts']) $(id).innerHTML = '';
+  for (const id of ['#donut', '#allocLegend', '#historyChart', '#chartLegend', '#tableWrap', '#alerts', '#heroMeta', '#toasts']) $(id).innerHTML = '';
   $('#netWorth').innerHTML = '<span class="skeleton w-200 h-40"></span>';
   $('#goldRate').hidden = true;
   $('#chartTip').hidden = true;

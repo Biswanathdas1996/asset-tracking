@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as yahoo from '../services/yahoo.js';
-import * as coingecko from '../services/coingecko.js';
+import * as crypto from '../services/crypto.js';
 import { FREQUENCIES } from '../services/sip.js';
 import { resolveBuyPrice, priceHolding, priceCrypto, recalculateSip, refreshAll } from '../services/valuation.js';
 import { keyToDate, toDateKey } from '../services/dates.js';
@@ -34,11 +34,12 @@ async function identify(type, body) {
   }
   const coinId = String(body.coinId || '').trim().toLowerCase();
   if (!coinId) throw new BadRequest('coinId is required (CoinGecko id, e.g. "bitcoin")');
-  const live = await coingecko.getPriceInr(coinId).catch((e) => {
-    throw e.status === 404 ? new BadRequest(`Coin "${coinId}" was not found on CoinGecko. Use the search to pick a coin.`) : e;
+  const symbol = String(body.symbol || coinId).trim().toUpperCase();
+  const live = await crypto.getPriceInr({ id: coinId, symbol }).catch((e) => {
+    throw e.status === 404 ? new BadRequest(`Coin "${coinId}" has no live price on CoinDCX or CoinGecko. Use the search to pick a coin.`) : e;
   });
   const fallbackName = coinId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  return { coinId, symbol: String(body.symbol || coinId).trim().toUpperCase(), name: text(body.name, 200) || fallbackName, exchange: 'CoinGecko', live };
+  return { coinId, symbol, name: text(body.name, 200) || fallbackName, exchange: live.source === 'coindcx' ? 'CoinDCX' : 'CoinGecko', live };
 }
 
 /** Validate a stock/crypto purchase and value it: buy price (market close on buy date unless given) + live price. */
