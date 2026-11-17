@@ -85,11 +85,17 @@ function confirmDialog({ title, text = '', ok = 'Delete', danger = true }) {
 
 // ---------- theme ----------
 const THEME_ICON = { system: 'monitor', light: 'sun', dark: 'moon' };
+const THEME_COLOR = { light: '#f6f7fb', dark: '#0a0c11' };
 let theme = document.documentElement.dataset.theme || 'system';
 function applyTheme(t) {
   theme = t;
   if (t === 'system') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = t;
+  // Keep the mobile browser's address bar / status bar in step with a forced theme.
+  for (const m of $$('meta[name="theme-color"]')) {
+    m.dataset.orig ??= m.content;
+    m.content = t === 'system' ? m.dataset.orig : THEME_COLOR[t];
+  }
   const btn = $('#themeBtn');
   btn.innerHTML = icon(THEME_ICON[t]);
   btn.dataset.tip = `Theme: ${t}`;
@@ -259,7 +265,7 @@ function stockTable(all, type) {
         <td class="actions">${rowActions(r._id)}</td>
       </tr>`).join('')}</tbody>
     <tfoot><tr><td>Total · ${rows.length}</td><td></td><td></td><td class="num hide-sm">${inr.format(tot.inv)}</td><td></td><td></td>
-      <td class="num">${inr.format(tot.val)}</td><td class="num ${cls(tpnl)}">${signed(tpnl)}</td><td></td></tr></tfoot>
+      <td class="num" data-label="Value">${inr.format(tot.val)}</td><td class="num ${cls(tpnl)}" data-label="P&amp;L">${signed(tpnl)}</td><td></td></tr></tfoot>
   </table>`;
 }
 
@@ -287,12 +293,45 @@ function goldTable(all) {
   </table>`;
 }
 
+// Column headers are hidden in the mobile card layout, so sorting there goes through a select.
+const SORT_OPTIONS = {
+  holding: [
+    ['currentValue', -1, 'Value: high to low'], ['currentValue', 1, 'Value: low to high'],
+    ['pnl', -1, 'P&L: high to low'], ['pnl', 1, 'P&L: low to high'],
+    ['pnlPercent', -1, 'Return %: high to low'], ['dayChangePercent', -1, 'Today: best first'],
+    ['dayChangePercent', 1, 'Today: worst first'], ['investedValue', -1, 'Invested: high to low'],
+    ['name', 1, 'Name: A to Z'], ['name', -1, 'Name: Z to A'],
+  ],
+  gold: [
+    ['currentValue', -1, 'Value: high to low'], ['currentValue', 1, 'Value: low to high'],
+    ['pnl', -1, 'P&L: high to low'], ['pnlPercent', -1, 'Return %: high to low'],
+    ['totalInvested', -1, 'Invested: high to low'], ['totalGrams', -1, 'Gold held: most first'],
+    ['name', 1, 'Name: A to Z'],
+  ],
+};
+function renderSortSelect() {
+  const sel = $('#sortSelect');
+  const opts = SORT_OPTIONS[state.tab === 'gold' ? 'gold' : 'holding'];
+  const { key, dir } = state.sort[state.tab];
+  const cur = `${key}:${dir}`;
+  const list = opts.map(([k, d, label]) => [`${k}:${d}`, label]);
+  if (!list.some(([v]) => v === cur)) list.unshift([cur, 'Custom (from column)']);
+  sel.innerHTML = list.map(([v, label]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${esc(label)}</option>`).join('');
+}
+$('#sortSelect').addEventListener('change', (e) => {
+  const [key, dir] = e.target.value.split(':');
+  state.sort[state.tab] = { key, dir: Number(dir) };
+  try { localStorage.setItem('sort', JSON.stringify(state.sort)); } catch { /* ignore */ }
+  renderTable();
+});
+
 function renderTable() {
   const d = state.data;
   if (!d) return;
   $$('.tab').forEach((t) => { const on = t.dataset.tab === state.tab; t.classList.toggle('active', on); t.setAttribute('aria-selected', on); });
   $$('.cat').forEach((c) => c.classList.toggle('active', c.dataset.cat === state.tab));
   $('#addLabel').textContent = { stock: 'Add stock', crypto: 'Add crypto', gold: 'Add SIP' }[state.tab];
+  renderSortSelect();
   $('#tableWrap').innerHTML = state.tab === 'stock' ? stockTable(d.stocks, 'stock') : state.tab === 'crypto' ? stockTable(d.crypto, 'crypto') : goldTable(d.goldSips);
 }
 
@@ -349,6 +388,7 @@ function renderHistory() {
   const all = chartSeries();
   const since = state.range ? new Date(Date.now() - state.range * 86400000).toISOString().slice(0, 10) : '';
   const pts = all.filter((p) => p.at >= since);
+  $('#chartTip').hidden = true;
   if (pts.length < 2) {
     chart = null;
     const d = vault.data;
@@ -431,8 +471,14 @@ function chartLeave() {
   if (!svg) return;
   $$('.cursor, .cursor-dot', svg).forEach((n) => n.setAttribute('visibility', 'hidden'));
 }
-$('#historyChart').addEventListener('pointermove', chartHover);
-$('#historyChart').addEventListener('pointerleave', chartLeave);
+// Mouse: hover to inspect. Touch/pen: tap or drag sideways to inspect; the tip stays until you tap elsewhere or scroll.
+const chartEl = $('#historyChart');
+chartEl.addEventListener('pointerdown', chartHover);
+chartEl.addEventListener('pointermove', chartHover);
+chartEl.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') chartLeave(); });
+chartEl.addEventListener('pointercancel', chartLeave); // vertical swipe handed over to page scroll
+document.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse' && !e.target.closest('#historyChart')) chartLeave(); }, { passive: true });
+window.addEventListener('scroll', () => { if (!$('#chartTip').hidden) chartLeave(); }, { passive: true });
 let resizeRaf;
 new ResizeObserver(() => {
   cancelAnimationFrame(resizeRaf);
@@ -606,6 +652,9 @@ function bindSearch() {
   if (!search) return;
   const box = $('#suggest');
   const hide = () => { box.hidden = true; search.setAttribute('aria-expanded', 'false'); };
+  // Keep focus in the input while tapping a suggestion, so the mobile keyboard doesn't
+  // collapse and the list doesn't close before the tap lands.
+  box.addEventListener('mousedown', (e) => e.preventDefault());
   search.addEventListener('input', () => {
     formCtx.picked = null;
     setPreview('');
@@ -1006,6 +1055,12 @@ setInterval(() => {
   if (!dialog.open && document.visibilityState === 'visible') load();
 }, 60000);
 setInterval(() => { if (vault.unlocked) renderStatus(); }, 20000);
+// Mobile browsers pause timers in the background: check on return so an idle vault locks straight away.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !vault.unlocked) return;
+  if (Date.now() - lastActivity > IDLE_LOCK_MS) lockApp('Locked after 15 minutes of inactivity.');
+  else if (!dialog.open) load();
+});
 
 if (!globalThis.crypto?.subtle) {
   $('#lock').hidden = false;
