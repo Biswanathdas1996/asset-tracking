@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0a0c11" media="(prefers-color-scheme: dark)" />
+  <title>Asset Tracker</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%235b5bf6'/%3E%3Ctext x='16' y='22.5' font-size='18' font-family='Segoe UI,sans-serif' font-weight='700' fill='white' text-anchor='middle'%3E%E2%82%B9%3C/text%3E%3C/svg%3E" />
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch { /* storage unavailable */ }
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Icon sprite (Lucide-style strokes) -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-sort" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 19V5"/></symbol>
+    <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></symbol>
+    <symbol id="i-stock" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></symbol>
+    <symbol id="i-gem" viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+    <symbol id="i-cmd" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></symbol>
+  </svg>
+
+  <!-- ============ Lock screen ============ -->
+  <section id="lock" class="lock" hidden>
+    <div class="lock-glow" aria-hidden="true"></div>
+    <form id="lockForm" class="lock-card" autocomplete="off" novalidate>
+      <div class="lock-brand">
+        <span class="logo">₹</span>
+        <span class="lock-badge"><svg class="i"><use href="#i-shield"/></svg> End-to-end encrypted</span>
+      </div>
+      <div>
+        <h1 id="lockTitle">Asset Tracker</h1>
+        <p class="lock-intro" id="lockIntro"></p>
+      </div>
+      <div class="field">
+        <label for="lockPass">Passphrase</label>
+        <div class="input-wrap">
+          <input id="lockPass" type="password" autocomplete="current-password" required minlength="1" />
+          <button type="button" class="input-icon" data-reveal="lockPass" aria-label="Show passphrase"><svg class="i"><use href="#i-eye"/></svg></button>
+        </div>
+        <div class="strength" id="strength" hidden><span></span><span></span><span></span><span></span><em id="strengthLabel"></em></div>
+      </div>
+      <div class="field" id="lockConfirmWrap" hidden>
+        <label for="lockConfirm">Confirm passphrase</label>
+        <input id="lockConfirm" type="password" autocomplete="new-password" />
+      </div>
+      <p class="file-chip" id="lockFile" hidden></p>
+      <p class="error" id="lockError" role="alert"></p>
+      <button type="submit" class="btn primary lg block" id="lockSubmit">Unlock</button>
+      <div class="lock-links">
+        <button type="button" class="link" id="restoreBtn"><svg class="i"><use href="#i-upload"/></svg> Restore from backup</button>
+        <button type="button" class="link" id="cancelRestoreBtn" hidden>Cancel restore</button>
+        <button type="button" class="link danger" id="resetBtn">Forgot passphrase?</button>
+      </div>
+      <input type="file" id="restoreFile" accept=".json,application/json" hidden />
+    </form>
+    <p class="lock-foot">AES-256-GCM · PBKDF2 600k · Data never leaves this browser</p>
+  </section>
+
+  <!-- ============ App ============ -->
+  <div id="appShell" hidden>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="logo">₹</span>
+          <div class="brand-text">
+            <strong>Asset Tracker</strong>
+            <span class="status" id="status"><span class="pulse"></span><span id="updated">Loading live prices…</span></span>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button id="refreshBtn" class="icon-btn" data-tip="Refresh prices (R)" aria-label="Refresh prices"><svg class="i"><use href="#i-refresh"/></svg></button>
+          <button id="exportBtn" class="icon-btn" data-tip="Download encrypted backup" aria-label="Download backup"><svg class="i"><use href="#i-download"/></svg></button>
+          <button id="passBtn" class="icon-btn" data-tip="Change passphrase" aria-label="Change passphrase"><svg class="i"><use href="#i-key"/></svg></button>
+          <button id="themeBtn" class="icon-btn" data-tip="Theme: system" aria-label="Toggle theme"><svg class="i"><use href="#i-monitor"/></svg></button>
+          <span class="divider" aria-hidden="true"></span>
+          <button id="lockBtn" class="btn subtle" aria-label="Lock"><svg class="i"><use href="#i-lock"/></svg><span class="wide">Lock</span></button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div id="alerts"></div>
+
+      <section class="hero">
+        <article class="card hero-card">
+          <div class="hero-top">
+            <div>
+              <div class="eyebrow"><svg class="i"><use href="#i-wallet"/></svg> Net worth</div>
+              <div class="hero-value" id="netWorth"><span class="skeleton w-200 h-40"></span></div>
+              <div class="hero-meta" id="heroMeta"><span class="skeleton w-160"></span></div>
+            </div>
+            <div class="seg" id="rangeSeg" role="tablist" aria-label="Chart range">
+              <button data-range="30" role="tab">1M</button>
+              <button data-range="90" role="tab">3M</button>
+              <button data-range="180" role="tab">6M</button>
+              <button data-range="365" role="tab">1Y</button>
+              <button data-range="0" role="tab">All</button>
+            </div>
+          </div>
+          <div id="historyChart" class="chart"></div>
+          <div class="chart-legend" id="chartLegend"></div>
+        </article>
+
+        <article class="card alloc-card">
+          <div class="card-head">
+            <h2>Allocation</h2>
+            <span class="pill" id="goldRate" hidden></span>
+          </div>
+          <div class="alloc-body">
+            <div class="donut" id="donut"></div>
+            <ul class="alloc-list" id="allocLegend"></ul>
+          </div>
+        </article>
+      </section>
+
+      <section class="cat-cards" id="summaryCards"></section>
+
+      <section class="card holdings">
+        <div class="holdings-head">
+          <div class="tabs" role="tablist" aria-label="Asset class">
+            <button class="tab" data-tab="stock" role="tab"><svg class="i"><use href="#i-stock"/></svg>Stocks <span class="count" data-count="stock"></span></button>
+            <button class="tab" data-tab="crypto" role="tab"><svg class="i"><use href="#i-coins"/></svg>Crypto <span class="count" data-count="crypto"></span></button>
+            <button class="tab" data-tab="gold" role="tab"><svg class="i"><use href="#i-gem"/></svg>Gold SIP <span class="count" data-count="gold"></span></button>
+          </div>
+          <div class="holdings-tools">
+            <label class="search">
+              <svg class="i"><use href="#i-search"/></svg>
+              <input id="filter" type="search" placeholder="Filter holdings" aria-label="Filter holdings" />
+              <kbd>/</kbd>
+            </label>
+            <button class="btn primary" id="addBtn"><svg class="i"><use href="#i-plus"/></svg><span id="addLabel">Add</span></button>
+          </div>
+        </div>
+        <div id="tableWrap" class="table-wrap"></div>
+      </section>
+
+      <footer class="footnote">
+        <svg class="i"><use href="#i-shield"/></svg>
+        <span>Encrypted in this browser with your passphrase (AES-256-GCM). Clearing site data deletes it, so <button class="link" id="footBackup">download a backup</button> now and then.</span>
+        <span class="shortcuts"><kbd>N</kbd> add · <kbd>R</kbd> refresh · <kbd>/</kbd> filter · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> tabs</span>
+      </footer>
+    </main>
+  </div>
+
+  <!-- ============ Dialogs ============ -->
+  <dialog id="dialog" class="sheet">
+    <form id="form" method="dialog" autocomplete="off">
+      <header class="dialog-head">
+        <span class="dialog-icon" id="formIcon"></span>
+        <h3 id="formTitle"></h3>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
+      </header>
+      <div class="dialog-body">
+        <div id="formBody"></div>
+        <div class="preview" id="preview" aria-live="polite"></div>
+        <p class="error" id="formError" role="alert"></p>
+      </div>
+      <footer class="dialog-foot">
+        <button type="button" class="btn subtle" id="cancelBtn">Cancel</button>
+        <button type="submit" class="btn primary" id="saveBtn">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="passDialog" class="sheet">
+    <form id="passForm" method="dialog" autocomplete="off">
+      <header class="dialog-head">
+        <span class="dialog-icon"><svg class="i"><use href="#i-key"/></svg></span>
+        <h3>Change passphrase</h3>
+        <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
+      </header>
+      <div class="dialog-body">
+        <div class="field"><label for="pCurrent">Current passphrase</label><input id="pCurrent" type="password" autocomplete="current-password" required /></div>
+        <div class="field"><label for="pNew">New passphrase</label><input id="pNew" type="password" autocomplete="new-password" required minlength="8" /></div>
+        <div class="field"><label for="pConfirm">Confirm new passphrase</label><input id="pConfirm" type="password" autocomplete="new-password" required /></div>
+        <p class="note"><svg class="i"><use href="#i-info"/></svg>Backups made earlier still open with the passphrase that was in use when they were made.</p>
+        <p class="error" id="passError" role="alert"></p>
+      </div>
+      <footer class="dialog-foot">
+        <button type="button" class="btn subtle" id="passCancel">Cancel</button>
+        <button type="submit" class="btn primary" id="passSave">Change passphrase</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="confirmDialog" class="sheet small">
+    <form method="dialog">
+      <div class="dialog-body confirm-body">
+        <span class="dialog-icon danger"><svg class="i"><use href="#i-alert"/></svg></span>
+        <h3 id="confirmTitle"></h3>
+        <p id="confirmText"></p>
+      </div>
+      <footer class="dialog-foot">
+        <button value="cancel" class="btn subtle" id="confirmCancel">Cancel</button>
+        <button value="ok" class="btn danger" id="confirmOk">Delete</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <div class="chart-tip" id="chartTip" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
