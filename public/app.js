@@ -160,11 +160,15 @@ function renderCategories(s) {
   for (const k of KEYS) { const c = $(`[data-count="${k}"]`); if (c) c.textContent = s[k].count; }
 }
 
+let allocSel = null; // category picked by tap/click in the allocation card
+
 function renderAlloc(s, goldPrice) {
   const total = s.total.value || 0;
+  const share = (k) => (total ? (s[k].value / total) * 100 : 0);
   const r = 60, C = 2 * Math.PI * r;
   const keys = KEYS.filter((k) => s[k].value > 0);
-  const gap = keys.length > 1 ? 2.5 : 0;
+  if (allocSel && !keys.includes(allocSel)) allocSel = null;
+  const gap = keys.length > 1 ? 3 : 0;
   let off = 0;
   const arcs = keys.map((k) => {
     const len = (s[k].value / total) * C;
@@ -173,27 +177,63 @@ function renderAlloc(s, goldPrice) {
     return arc;
   }).join('');
   $('#donut').innerHTML = `<svg viewBox="0 0 150 150" aria-hidden="true"><circle class="track" cx="75" cy="75" r="${r}"/>${arcs}</svg>
-    <div class="donut-center"><b>${total ? inrC.format(total) : '₹0'}</b><span>${total ? 'total value' : 'no assets yet'}</span></div>`;
-  $('#allocLegend').innerHTML = KEYS.map((k) => `
-    <li data-k="${k}"><span class="sw" style="background:${META[k].color}"></span><span class="nm">${META[k].label}</span>
-      <span class="pc">${total ? ((s[k].value / total) * 100).toFixed(1) : '0.0'}%</span>
-      <span class="vl">${inr0.format(s[k].value)}</span></li>`).join('');
+    <div class="donut-center" id="donutCenter"></div>`;
+  $('#allocBar').innerHTML = keys.length
+    ? keys.map((k) => `<span data-k="${k}" style="flex-grow:${share(k).toFixed(3)};background:${META[k].color}"></span>`).join('')
+    : '<span class="empty"></span>';
+  $('#allocLegend').innerHTML = KEYS.map((k) => {
+    const b = s[k], m = META[k], sh = share(k);
+    return `<li data-k="${k}" style="--c:${m.color}" role="button" tabindex="0" aria-pressed="false" ${b.value ? '' : 'class="none"'}>
+      <span class="al-ic">${icon(m.icon)}</span>
+      <span class="al-main">
+        <span class="al-row"><span class="nm">${m.label}</span><span class="pc">${sh.toFixed(1)}<small>%</small></span></span>
+        <span class="al-meter"><span style="width:${sh.toFixed(2)}%"></span></span>
+        <span class="al-row al-sub"><span class="vl">${inr0.format(b.value)}</span>${b.invested ? `<span class="al-pl ${chipCls(b.pnl)}">${pct(b.pnlPercent)}</span>` : ''}</span>
+      </span>
+    </li>`;
+  }).join('');
   const gr = $('#goldRate');
   gr.hidden = !goldPrice;
   if (goldPrice) gr.innerHTML = `<span class="sw" style="width:8px;height:8px;border-radius:50%;background:var(--gold)"></span>24K ${inr0.format(goldPrice.pricePerGram)}/g`;
+  allocData = { s, total };
+  highlightAlloc(allocSel);
 }
 
-// Allocation hover: legend row <-> donut arc
+let allocData = null;
+/** Emphasise one category across the donut, bar and list, and show its numbers in the summary. */
+function highlightAlloc(k) {
+  if (!allocData) return;
+  const { s, total } = allocData;
+  const card = $('.alloc-card');
+  card.classList.toggle('focusing', !!k);
+  $$('[data-k]', card).forEach((n) => {
+    n.classList.toggle('hot', n.dataset.k === k);
+    if (n.tagName === 'LI') n.setAttribute('aria-pressed', String(n.dataset.k === allocSel));
+  });
+  const b = k ? s[k] : s.total;
+  const label = k ? META[k].label : total ? 'Total value' : 'No assets yet';
+  const share = k && total ? `${((b.value / total) * 100).toFixed(1)}% of portfolio` : `${KEYS.filter((x) => s[x].value > 0).length} asset classes`;
+  $('#donutCenter').innerHTML = `<span>${label}</span><b>${total ? inrC.format(b.value) : '₹0'}</b>${k ? `<em>${share}</em>` : ''}`;
+  $('#allocSummary').innerHTML = `<div><span class="lbl">${label}</span><b>${inr0.format(b.value)}</b></div>
+    ${total ? `<span class="mini-chip ${chipCls(b.pnl)}">${signed(b.pnl, inrC)} · ${pct(b.pnlPercent)}</span>` : ''}
+    <span class="alloc-hint">${share}</span>`;
+}
+
+// Allocation interactions: hover previews, tap/click/Enter pins a category
 const allocCard = $('.alloc-card');
 allocCard.addEventListener('mouseover', (e) => {
-  const k = e.target.closest('[data-k]')?.dataset.k;
-  $('#donut').classList.toggle('hovering', !!k);
-  $$('[data-k]', allocCard).forEach((n) => n.classList.toggle('hot', n.dataset.k === k));
+  if (!matchMedia('(hover: hover)').matches) return;
+  highlightAlloc(e.target.closest('[data-k]')?.dataset.k || allocSel);
 });
-allocCard.addEventListener('mouseleave', () => {
-  $('#donut').classList.remove('hovering');
-  $$('[data-k]', allocCard).forEach((n) => n.classList.remove('hot'));
-});
+allocCard.addEventListener('mouseleave', () => highlightAlloc(allocSel));
+const pickAlloc = (e) => {
+  const n = e.target.closest('[data-k]');
+  if (!n || n.classList.contains('none')) return;
+  allocSel = allocSel === n.dataset.k ? null : n.dataset.k;
+  highlightAlloc(allocSel);
+};
+allocCard.addEventListener('click', pickAlloc);
+allocCard.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('li[data-k]')) { e.preventDefault(); pickAlloc(e); } });
 
 // ---------- holdings table ----------
 function th(key, label, num = false) {
