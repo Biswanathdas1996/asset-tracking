@@ -109,10 +109,16 @@
    ========================================================= */
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  touch-action: manipulation;          /* no double-tap zoom */
+  overscroll-behavior: none;           /* no pull-to-refresh / rubber-band */
+  -webkit-tap-highlight-color: transparent;
+}
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
+  overscroll-behavior-y: none;
   background: var(--bg-grad), var(--bg);
   background-attachment: fixed;
   color: var(--text);
@@ -578,7 +584,7 @@ details.ledger td:first-child { white-space: nowrap; }
 dialog.sheet {
   border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 0; width: min(540px, calc(100vw - 24px));
   background: var(--surface); color: var(--text); box-shadow: var(--shadow-lg);
-  max-height: calc(100vh - 32px); overflow: auto;
+  max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain;
 }
 dialog.sheet.small { width: min(420px, calc(100vw - 24px)); }
 dialog.sheet[open] { animation: pop .28s var(--ease); }
@@ -608,7 +614,7 @@ dialog form { display: grid; }
    Lock screen
    ========================================================= */
 .lock {
-  min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 18px;
+  min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; align-content: center; gap: 18px;
   padding: 24px 16px; position: relative; overflow: hidden;
 }
 .lock-glow {
@@ -718,6 +724,41 @@ dialog form { display: grid; }
   details.ledger summary { margin-left: 0; }
   .asset { min-width: 0; }
 }
+/* ---------- App-like feel on touch devices ---------- */
+@media (hover: none) and (pointer: coarse) {
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  input, textarea, select, td, .hero-value, .toast, [contenteditable] { -webkit-user-select: text; user-select: text; }
+  /* iOS zooms into inputs under 16px on focus; keep them at 16px */
+  input, select, textarea, .field input, .field select, .search input { font-size: 16px !important; }
+  button, .tab, .cat, a { -webkit-touch-callout: none; }
+  button:active, .icon-btn:active, .tab:active, .cat:active { transform: scale(.97); transition: transform .08s; }
+}
+@media (max-width: 760px) {
+  .topbar { padding-top: env(safe-area-inset-top); }
+  .topbar-inner { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+  main { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
+  .lock { padding-top: calc(24px + env(safe-area-inset-top)); padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .toasts { bottom: calc(16px + env(safe-area-inset-bottom)); }
+
+  /* Dialogs slide up as native-style bottom sheets */
+  dialog.sheet, dialog.sheet.small {
+    width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 22px 22px 0 0; border-bottom: 0;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+  }
+  dialog.sheet[open] { animation: sheet-up .32s var(--ease); }
+  dialog.sheet::before {
+    content: ""; display: block; width: 40px; height: 5px; border-radius: 3px;
+    background: var(--border-strong); margin: 8px auto 0;
+  }
+  .dialog-foot { border-radius: 0; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  .dialog-foot .btn { flex: 1; justify-content: center; height: 44px; }
+}
+@keyframes sheet-up { from { transform: translateY(100%); } }
+/* Installed (home-screen) mode */
+@media (display-mode: standalone) {
+  .footnote .shortcuts { display: none; }
+}
+
 @media (min-width: 761px) {
   td.lead .row-actions { display: none; }
 }
