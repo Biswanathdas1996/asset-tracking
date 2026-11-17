@@ -362,7 +362,7 @@ main > * { min-width: 0; }
 .cat::before {
   content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--c); opacity: .9;
 }
-.cat:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--c) 40%, var(--border)); box-shadow: var(--shadow-lg); }
+@media (hover: hover) { .cat:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--c) 40%, var(--border)); box-shadow: var(--shadow-lg); } }
 .cat.active { border-color: color-mix(in srgb, var(--c) 55%, var(--border)); }
 .cat-top { display: flex; align-items: center; gap: 10px; }
 .cat-ic {
@@ -370,8 +370,8 @@ main > * { min-width: 0; }
   background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c);
 }
 .cat-ic .i { width: 18px; height: 18px; }
-.cat-name { font-weight: 600; font-size: 14px; }
-.cat-count { font-size: 12px; color: var(--muted); margin-left: auto; }
+.cat-name { font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-count { font-size: 12px; color: var(--muted); margin-left: auto; white-space: nowrap; }
 .cat-value { font-size: 23px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .cat-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
 .bar { height: 4px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
@@ -692,37 +692,14 @@ dialog form { display: grid; }
   .chart { height: 190px; }
   .holdings-head { padding: 12px; }
   .holdings-tools { width: 100%; }
-  .search { flex: 1; width: auto; }
+  .search { flex: 1; width: auto; min-width: 0; }
+  .holdings-tools .btn { flex: none; }
   .tabs { width: 100%; }
   .tab { flex: 1; justify-content: center; padding: 7px 8px; }
   .icon-btn { width: 36px; height: 36px; }
   #lockBtn { width: 36px; padding: 0; }
   .toasts { left: 16px; right: 16px; bottom: 16px; width: auto; }
 
-  /* Holdings table becomes a card list */
-  .table-wrap table.holdings-table, .holdings-table tbody, .holdings-table tr, .holdings-table td { display: block; }
-  .holdings-table thead { display: none; }
-  .holdings-table tbody tr { padding: 14px 14px 10px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
-  .holdings-table tbody tr.has-ledger { border-bottom: none; padding-bottom: 4px; }
-  .holdings-table tbody tr.ledger-row { display: block; padding: 0 14px 12px; }
-  .holdings-table tbody tr:hover { background: none; }
-  .holdings-table tbody td { padding: 0; border: none; text-align: left; }
-  .holdings-table td[data-label]::before {
-    content: attr(data-label); display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: .05em; color: var(--muted); margin-bottom: 1px;
-  }
-  .holdings-table td.num { text-align: left; }
-  .holdings-table td.lead { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .holdings-table td.actions { display: none; }
-  .holdings-table td.lead .row-actions { display: inline-flex; opacity: 1; }
-  .holdings-table .pnl-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .holdings-table td.hide-sm { display: none; }
-  .holdings-table tfoot { display: block; }
-  .holdings-table tfoot tr { display: flex; justify-content: space-between; padding: 12px 14px; background: var(--surface-2); }
-  .holdings-table tfoot td { display: block; padding: 0; border: 0; background: none; }
-  .holdings-table tfoot td:empty, .holdings-table tfoot td.hide-sm { display: none; }
-  details.ledger summary { margin-left: 0; }
-  .asset { min-width: 0; }
 }
 /* ---------- App-like feel on touch devices ---------- */
 @media (hover: none) and (pointer: coarse) {
@@ -753,13 +730,67 @@ dialog form { display: grid; }
   .dialog-foot { border-radius: 0; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
   .dialog-foot .btn { flex: 1; justify-content: center; height: 44px; }
 }
+/* Small phones */
+@media (max-width: 420px) {
+  .topbar-inner { gap: 8px; }
+  .brand { gap: 10px; flex: 1; }
+  .brand .logo { width: 34px; height: 34px; border-radius: 10px; font-size: 16px; flex: none; }
+  .brand-text strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top-actions { gap: 0; flex: none; }
+  .icon-btn, #lockBtn { width: 34px; height: 34px; }
+  main { gap: 12px; }
+  .card { padding: 16px; }
+  .hero-meta { gap: 6px 10px; }
+  .seg { display: flex; width: 100%; }
+  .seg button { flex: 1; }
+  .tab .i { display: none; }
+  .tab { padding: 7px 4px; gap: 5px; }
+  .alloc-body { flex-direction: column; align-items: center; }
+  .donut { width: 150px; }
+  .alloc-list { width: 100%; }
+}
+@media (max-width: 360px) {
+  .brand-text strong { display: none; }
+  #addLabel { display: none; }
+  .holdings-tools .btn { width: 38px; padding: 0; }
+}
 @keyframes sheet-up { from { transform: translateY(100%); } }
 /* Installed (home-screen) mode */
 @media (display-mode: standalone) {
   .footnote .shortcuts { display: none; }
 }
 
-@media (min-width: 761px) {
+/* Holdings table becomes a card list on phones and tablets */
+@media (max-width: 1100px) {
+  .table-wrap table.holdings-table, .holdings-table tbody, .holdings-table tr, .holdings-table td { display: block; }
+  .holdings-table thead { display: none; }
+  .holdings-table tbody tr { padding: 14px 14px 10px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+  .holdings-table tbody tr.has-ledger { border-bottom: none; padding-bottom: 4px; }
+  .holdings-table tbody tr.ledger-row { display: block; padding: 0 14px 12px; }
+  .holdings-table tbody tr:hover { background: none; }
+  .holdings-table tbody td { padding: 0; border: none; text-align: left; }
+  .holdings-table td[data-label]::before {
+    content: attr(data-label); display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--muted); margin-bottom: 1px;
+  }
+  .holdings-table td.num { text-align: left; }
+  .holdings-table td.lead { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .holdings-table td.actions { display: none; }
+  .holdings-table td.lead .row-actions { display: inline-flex; opacity: 1; }
+  .holdings-table .pnl-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .holdings-table td.hide-sm { display: none; }
+  .holdings-table tfoot { display: block; }
+  .holdings-table tfoot tr { display: flex; justify-content: space-between; padding: 12px 14px; background: var(--surface-2); }
+  .holdings-table tfoot td { display: block; padding: 0; border: 0; background: none; }
+  .holdings-table tfoot td:empty, .holdings-table tfoot td.hide-sm { display: none; }
+  details.ledger summary { margin-left: 0; }
+  .asset { min-width: 0; }
+}
+@media (min-width: 601px) and (max-width: 1100px) {
+  .holdings-table tbody tr:not(.ledger-row) { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 16px 18px 12px; }
+  .holdings-table tbody tr.ledger-row { padding: 0 18px 12px; }
+}
+@media (min-width: 1101px) {
   td.lead .row-actions { display: none; }
 }
 
