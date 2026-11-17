@@ -36,7 +36,7 @@ let version = 0; // bumps on every local change so an in-flight refresh never ov
 try {
   state.tab = localStorage.getItem('tab') || 'stock';
   const r = Number(localStorage.getItem('range'));
-  if ([0, 30, 90, 180, 365].includes(r) && localStorage.getItem('range') !== null) state.range = r;
+  if ([0, 1, 7, 30, 90, 180, 365].includes(r) && localStorage.getItem('range') !== null) state.range = r;
   const s = JSON.parse(localStorage.getItem('sort') || 'null');
   if (s && KEYS.every((k) => s[k]?.key)) state.sort = s;
 } catch { /* storage unavailable */ }
@@ -278,7 +278,7 @@ function stockTable(all, type) {
     <thead><tr>${th('name', type === 'stock' ? 'Stock' : 'Coin')}${th('quantity', 'Qty', true)}${th('buyPrice', 'Avg buy', true)}${th('investedValue', 'Invested', true)}
       ${th('currentPrice', 'Live price', true)}${th('dayChangePercent', 'Day', true)}${th('currentValue', 'Value', true)}${th('pnl', 'P&amp;L', true)}<th></th></tr></thead>
     <tbody>${rows.map((r) => `
-      <tr>
+      <tr${type === 'stock' ? ' class="has-ledger"' : ''}>
         <td class="lead"><div class="asset">${avatar(assetInitials(r, type), c)}<div>
           <div class="name">${esc(r.name)}</div>
           <div class="sub">${esc(shortSym(r.symbol))} · ${fmtDate(r.buyDate)}${r.notes ? ` · ${esc(r.notes)}` : ''}</div></div></div>${rowActions(r._id)}</td>
@@ -290,10 +290,60 @@ function stockTable(all, type) {
         <td class="num" data-label="Value"><b>${r.currentValue != null ? inr.format(r.currentValue) : '—'}</b></td>
         <td class="num" data-label="P&amp;L"><div class="pnl-cell"><span class="${cls(r.pnl)}">${signed(r.pnl)}</span><span class="mini-chip ${chipCls(r.pnl)}">${pct(r.pnlPercent)}</span></div></td>
         <td class="actions">${rowActions(r._id)}</td>
-      </tr>`).join('')}</tbody>
+      </tr>${type === 'stock' ? `<tr class="ledger-row shp-row"><td colspan="9">${shpLine(r.symbol)}</td></tr>` : ''}`).join('')}</tbody>
     <tfoot><tr><td>Total · ${rows.length}</td><td></td><td></td><td class="num hide-sm">${inr.format(tot.inv)}</td><td></td><td></td>
       <td class="num" data-label="Value">${inr.format(tot.val)}</td><td class="num ${cls(tpnl)}" data-label="P&amp;L">${signed(tpnl)}</td><td></td></tr></tfoot>
   </table>`;
+}
+
+// ---------- Promoter / FII / DII / retail holding trend (quarterly shareholding pattern) ----------
+const shp = { data: {}, pending: new Set() };
+function shpCard(label, t) {
+  if (!t) return '';
+  const ch = t.change;
+  const tone = ch == null || ch === 0 ? 'flat' : ch > 0 ? 'gain' : 'loss';
+  const width = Math.max(0, Math.min(100, t.pct));
+  const flow = ch == null ? '' : ch === 0
+    ? '<span class="shp-flow flat">Unchanged</span>'
+    : `<span class="shp-flow ${tone}">${ch > 0 ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}%<span class="shp-dir">${ch > 0 ? 'inflow' : 'outflow'}</span></span>`;
+  return `<div class="shp-card ${tone}">
+    <span class="shp-k">${label}</span>
+    <span class="shp-pct">${t.pct.toFixed(2)}<span class="shp-unit">%</span></span>
+    ${flow}
+    <span class="shp-bar" aria-hidden="true"><span style="width:${width.toFixed(2)}%"></span></span>
+  </div>`;
+}
+function shpWhen(period) {
+  if (!period) return '';
+  const [from, to] = period.split(' → ');
+  if (!to) return `<span class="shp-when">${esc(period)}</span>`;
+  return `<span class="shp-when">${esc(from)}<span class="shp-to" aria-hidden="true">→</span>${esc(to)}</span>`;
+}
+function shpLine(symbol) {
+  if (!(symbol in shp.data)) {
+    if (!shp.pending.has(symbol)) return '<div class="shp"></div>';
+    return `<div class="shp is-loading" aria-busy="true">${'<span class="shp-skel"></span>'.repeat(4)}</div>`;
+  }
+  const d = shp.data[symbol];
+  const t = d && (d.promoter || d.fii || d.dii || d.retail);
+  if (!t) return '<div class="shp is-empty">Shareholding data not available</div>';
+  const period = t.prevQuarter ? `${t.prevQuarter} → ${t.quarter}` : (t.quarter || '');
+  return `<div class="shp" title="Share of the company held by promoters, foreign (FII) and domestic (DII) institutions, and retail (public) investors, with the change over the last quarter. Source: Screener.in">
+    ${shpCard('Promoter', d.promoter)}${shpCard('FII', d.fii)}${shpCard('DII', d.dii)}${shpCard('Retail', d.retail)}${shpWhen(period)}</div>`;
+}
+async function loadShareholding() {
+  const want = [...new Set((state.data?.stocks || []).map((h) => h.symbol))].filter((s) => s && !(s in shp.data) && !shp.pending.has(s));
+  if (!want.length) return;
+  want.forEach((s) => shp.pending.add(s));
+  if (state.tab === 'stock') renderTable();
+  try {
+    for (let i = 0; i < want.length; i += 60) {
+      const part = want.slice(i, i + 60);
+      Object.assign(shp.data, await api(`/shareholding?symbols=${encodeURIComponent(part.join(','))}`));
+    }
+  } catch { /* leave missing: retried on the next render */ }
+  want.forEach((s) => shp.pending.delete(s));
+  if (state.tab === 'stock') renderTable();
 }
 
 function goldTable(all) {
@@ -567,6 +617,8 @@ function render() {
     ? `<div class="alert">${icon('alert')}<div><b>Some prices could not be updated.</b> ${esc(state.errors.join('; '))}</div><button class="icon-btn sm x" data-dismiss aria-label="Dismiss">${icon('x')}</button></div>`
     : '';
   renderHistory();
+  renderNews();
+  loadShareholding();
 }
 
 /** Persist a change to the encrypted store and redraw. */
@@ -576,6 +628,7 @@ async function mutate(fn) {
   await vault.save();
   render();
   fetchHistory();
+  fetchNews();
 }
 
 /** Revalue everything with live prices. The server prices the records and returns them; it stores nothing. */
@@ -618,6 +671,234 @@ async function load(refresh = false) {
     fetchHistory();
   }
 }
+
+// ---------- news & signals ----------
+// The server's news agent scans headlines for each holding and flags stories that could move the price.
+// Only names and symbols are sent (no quantities or amounts). The latest brief is kept in the encrypted vault.
+const NEWS_REFRESH_MS = 15 * 60000;
+const NEWS_PAGE = 12;
+const news = { view: 'flagged', filter: 'all', loading: false, error: null, limit: NEWS_PAGE };
+try { if (localStorage.getItem('newsView') === 'all') news.view = 'all'; } catch { /* ignore */ }
+const IMPACT = {
+  bullish: { label: 'Bullish', icon: 'arrow-up', cls: 'gain' },
+  bearish: { label: 'Bearish', icon: 'arrow-down', cls: 'loss' },
+  mixed: { label: 'Watch', icon: 'alert', cls: 'warn' },
+};
+
+/** One entry per distinct asset (several lots of the same stock count once), largest position first. */
+function newsHoldings() {
+  const d = vault.data;
+  const byKey = new Map();
+  for (const h of d.holdings) {
+    const key = h.assetType === 'crypto' ? (h.coinId || h.symbol) : h.symbol;
+    const e = byKey.get(key) || { key, assetType: h.assetType, symbol: h.symbol, name: h.name, dayChangePercent: h.dayChangePercent ?? null, value: 0 };
+    e.value += h.currentValue ?? h.investedValue ?? 0;
+    byKey.set(key, e);
+  }
+  const list = [...byKey.values()].sort((a, b) => b.value - a.value);
+  if (d.goldSips.length) list.push({ key: 'gold', assetType: 'gold', symbol: 'GOLD', name: 'Gold', dayChangePercent: null });
+  return list.map(({ value, ...h }) => h);
+}
+const newsSig = (list) => list.map((h) => h.key).join('|');
+
+async function fetchNews(force = false) {
+  if (!vault.unlocked || news.loading) return;
+  const list = newsHoldings();
+  const meta = vault.data.meta;
+  if (!list.length) {
+    if (meta.news) { delete meta.news; await vault.save(); }
+    renderNews();
+    return;
+  }
+  const sig = newsSig(list);
+  const cached = meta.news;
+  if (!force && cached?.sig === sig && Date.now() - Date.parse(cached.generatedAt) < NEWS_REFRESH_MS) return;
+  news.loading = true;
+  news.error = null;
+  renderNews();
+  const btn = $('#newsRefresh');
+  btn.disabled = true;
+  btn.classList.add('spinning');
+  try {
+    const r = await api('/news/brief', { method: 'POST', body: { holdings: list } });
+    if (!vault.unlocked) return;
+    const seen = new Set(meta.newsSeen || []);
+    const firstScan = !meta.newsSeen;
+    const flagged = r.items.filter((i) => i.flagged);
+    const fresh = flagged.filter((i) => !seen.has(i.id));
+    for (const i of flagged) seen.add(i.id);
+    meta.newsSeen = [...seen].slice(-600);
+    meta.news = { sig, ...r, newIds: firstScan ? [] : fresh.map((i) => i.id) };
+    await vault.save();
+    const hot = firstScan ? [] : fresh.filter((i) => i.severity === 'high');
+    if (hot.length) {
+      toast(hot.length === 1 ? `High-impact story: ${hot[0].title}` : `${hot.length} new high-impact stories for your holdings`, 'info', {
+        label: 'View', fn: () => { news.view = 'flagged'; news.filter = 'all'; renderNews(); $('#news').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }); },
+      });
+    } else if (force) toast(`News rescanned · ${flagged.length} flagged`, 'success');
+  } catch (e) {
+    news.error = e.message;
+  } finally {
+    news.loading = false;
+    btn.disabled = false;
+    btn.classList.remove('spinning');
+    if (vault.unlocked) renderNews();
+  }
+}
+
+function newsLabels() {
+  const map = new Map(newsHoldings().map((h) => [h.key, {
+    label: h.assetType === 'gold' ? 'Gold' : shortSym(h.symbol) || h.name,
+    name: h.name,
+    avatar: avatar(assetInitials(h, h.assetType), META[h.assetType].color),
+  }]));
+  map.set('market', { label: 'Market', name: 'Market-wide', avatar: `<span class="avatar" style="--c:var(--accent)">${icon('stock')}</span>` });
+  return map;
+}
+
+function newsItem(i, labels, isNew) {
+  const h = labels.get(i.holding) || labels.get('market');
+  const imp = i.flagged ? IMPACT[i.impact] || IMPACT.mixed : null;
+  const when = i.publishedAt ? ago(i.publishedAt) : '';
+  return `<article class="news-item ${i.flagged ? `flagged sev-${esc(i.severity)} imp-${esc(i.impact)}` : ''}">
+    ${h.avatar}
+    <div class="news-body">
+      <div class="news-meta"><b>${esc(h.label)}</b><span class="sep"></span><span>${esc(i.source)}</span>${when ? `<span class="sep"></span><time datetime="${esc(i.publishedAt)}">${when}</time>` : ''}${isNew ? '<span class="badge new">New</span>' : ''}</div>
+      <a class="news-headline" href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}${icon('external', 'ext')}</a>
+      ${i.why ? `<p class="news-why">${esc(i.why)}</p>` : ''}
+      ${imp ? `<div class="news-tags">
+        <span class="mini-chip ${imp.cls}">${icon(imp.icon)}${imp.label}</span>
+        <span class="sev sev-${esc(i.severity)}" title="Likely price impact">${esc(i.severity)} impact</span>
+        ${(i.kpis || []).map((k) => `<span class="kpi">${esc(k)}</span>`).join('')}</div>` : ''}
+    </div>
+  </article>`;
+}
+
+function renderNews() {
+  const el = $('#news');
+  if (!vault.unlocked) return;
+  const n = vault.data.meta.news;
+  const labels = newsLabels();
+  const has = vault.data.holdings.length || vault.data.goldSips.length;
+  $$('#newsSeg button').forEach((b) => b.classList.toggle('active', b.dataset.view === news.view));
+
+  // Status line + engine badge
+  const st = $('#newsStatus');
+  let detail = '';
+  if (news.loading) st.textContent = n ? 'Rescanning…' : 'Scanning…';
+  else if (news.error) st.innerHTML = `<span class="loss">${esc(news.error)}</span>`;
+  else if (n) {
+    st.textContent = `${n.items.length} · ${ago(n.generatedAt)}`;
+    detail = `${n.items.length} headlines · updated ${ago(n.generatedAt)} · rescans every 15 min`;
+  } else st.textContent = has ? 'Not scanned yet' : 'Watches price-moving stories';
+  st.title = [detail, ...(n?.errors || [])].filter(Boolean).join('\n');
+  const eng = $('#newsEngine');
+  eng.hidden = !n;
+  if (n) {
+    eng.innerHTML = n.ai
+      ? `${icon('sparkles')}<span>AI</span><span class="eng-model">${esc(n.ai.model)}</span>`
+      : `${icon('search')}<span>Keywords</span>`;
+    eng.title = n.ai ? `Stories analysed by ${n.ai.model}` : 'Set OLLAMA_API_KEY on the server to have an AI agent analyse the news';
+    eng.classList.toggle('ai', !!n.ai);
+  }
+
+  if (!has) {
+    $('#newsSummary').hidden = true;
+    $('#newsFilter').innerHTML = '';
+    $('#newsFlagCount').textContent = '';
+    $('#newsList').innerHTML = `<div class="empty-state small"><span class="big-ic">${icon('news')}</span><h3>No news yet</h3><p>Add a holding and the agent will watch the news for stories that could move its price.</p></div>`;
+    return;
+  }
+  if (!n) {
+    $('#newsSummary').hidden = true;
+    $('#newsFilter').innerHTML = '';
+    $('#newsList').innerHTML = news.loading
+      ? Array.from({ length: 3 }, () => '<div class="news-item"><span class="skeleton" style="width:36px;height:36px;border-radius:10px"></span><div class="news-body"><span class="skeleton w-160"></span><span class="skeleton" style="width:90%"></span><span class="skeleton" style="width:60%"></span></div></div>').join('')
+      : `<div class="empty-state small"><span class="big-ic">${icon('news')}</span><h3>News unavailable</h3><p>${esc(news.error || 'Headlines could not be fetched.')}</p><button class="btn subtle" data-news-retry>${icon('refresh')}Try again</button></div>`;
+    return;
+  }
+
+  const flagged = n.items.filter((i) => i.flagged);
+  $('#newsFlagCount').textContent = flagged.length || '';
+  const sentiment = new Map((n.holdings || []).map((h) => [h.holding, h]));
+
+  // Summary + per-holding sentiment
+  const sum = $('#newsSummary');
+  const high = flagged.filter((i) => i.severity === 'high').length;
+  sum.hidden = !n.summary && !high;
+  const paras = String(n.summary || '').split(/\n+/).map((p) => p.trim()).filter(Boolean)
+    .map((p) => `<p>${esc(p)}</p>`).join('');
+  sum.innerHTML = `${icon(n.ai ? 'sparkles' : 'flag')}<div>${paras}${high ? `<p class="hi">${icon('alert')}${high} high-impact ${high === 1 ? 'story' : 'stories'} flagged</p>` : ''}</div>`;
+
+  // Holding filter chips (only holdings that have stories)
+  const pool = news.view === 'flagged' ? flagged : n.items;
+  const counts = new Map();
+  for (const i of pool) counts.set(i.holding, (counts.get(i.holding) || 0) + 1);
+  if (news.filter !== 'all' && !counts.has(news.filter)) news.filter = 'all';
+  const order = [...labels.keys()].filter((k) => counts.has(k) || sentiment.has(k));
+  const chip = (key, label, count, { dot = '', title = '' } = {}) => {
+    const on = news.filter === key;
+    const quiet = key !== 'all' && !count ? ' quiet' : '';
+    return `<button type="button" class="nf${on ? ' active' : ''}${quiet}" data-nf="${esc(key)}" aria-pressed="${on}"${title ? ` title="${esc(title)}"` : ''}>${dot}<span class="nf-name">${esc(label)}</span><span class="nf-n">${count}</span></button>`;
+  };
+  $('#newsFilter').innerHTML = [chip('all', 'All', pool.length),
+    ...order.map((k) => {
+      const s = sentiment.get(k);
+      return chip(k, labels.get(k).label, counts.get(k) || 0, {
+        dot: s ? `<i class="dot ${esc(s.sentiment)}" aria-hidden="true"></i>` : '',
+        title: s?.note ? `${s.sentiment}: ${s.note}` : '',
+      });
+    })].join('');
+  placeNewsFilter();
+
+  const shown = pool.filter((i) => news.filter === 'all' || i.holding === news.filter);
+  const fresh = new Set(n.newIds || []);
+  const note = news.filter !== 'all' ? sentiment.get(news.filter) : null;
+  $('#newsList').innerHTML = (note?.note ? `<p class="news-note"><i class="dot ${note.sentiment}"></i><b>${esc(labels.get(news.filter)?.name)}</b> · ${esc(note.note)}</p>` : '')
+    + (shown.length
+      ? shown.slice(0, news.limit).map((i) => newsItem(i, labels, fresh.has(i.id))).join('')
+        + (shown.length > news.limit ? `<button class="btn subtle block news-more" data-news-more>Show ${Math.min(NEWS_PAGE, shown.length - news.limit)} more</button>` : '')
+      : `<div class="empty-state small"><span class="big-ic" style="--c:var(--gain)">${icon('check')}</span><h3>Nothing flagged right now</h3><p>No story in the last few days looks likely to move ${news.filter === 'all' ? 'your holdings' : esc(labels.get(news.filter)?.label)}.</p>${news.view === 'flagged' ? '<button class="btn subtle" data-news-view="all">Show all headlines</button>' : ''}</div>`);
+}
+
+function syncNewsFilterEdges() {
+  const bar = $('#newsFilter');
+  if (!bar) return;
+  const max = bar.scrollWidth - bar.clientWidth;
+  bar.classList.toggle('can-left', bar.scrollLeft > 6);
+  bar.classList.toggle('can-right', max - bar.scrollLeft > 6);
+}
+
+function placeNewsFilter() {
+  const bar = $('#newsFilter');
+  const active = bar?.querySelector('.nf.active');
+  if (bar && active && news.filter !== 'all') {
+    const left = active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2;
+    bar.scrollTo({ left: Math.max(0, left), behavior: 'auto' });
+  }
+  syncNewsFilterEdges();
+}
+
+$('#newsFilter').addEventListener('scroll', syncNewsFilterEdges, { passive: true });
+addEventListener('resize', syncNewsFilterEdges);
+
+$('#newsSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-view]');
+  if (!b) return;
+  news.view = b.dataset.view;
+  news.limit = NEWS_PAGE;
+  try { localStorage.setItem('newsView', news.view); } catch { /* ignore */ }
+  renderNews();
+});
+$('#news').addEventListener('click', (e) => {
+  const f = e.target.closest('[data-nf]');
+  if (f) { news.filter = f.dataset.nf; news.limit = NEWS_PAGE; renderNews(); return; }
+  if (e.target.closest('[data-news-more]')) { news.limit += NEWS_PAGE; renderNews(); return; }
+  const v = e.target.closest('[data-news-view]');
+  if (v) { news.view = v.dataset.newsView; news.limit = NEWS_PAGE; renderNews(); return; }
+  if (e.target.closest('[data-news-retry]')) fetchNews(true);
+});
+$('#newsRefresh').addEventListener('click', () => fetchNews(true));
 
 // ---------- forms ----------
 const dialog = $('#dialog');
@@ -961,7 +1242,7 @@ function enterApp() {
   chartAnimate = true;
   $('#lock').hidden = true;
   $('#appShell').hidden = false;
-  load().then(fetchHistory);
+  load().then(() => { fetchHistory(); fetchNews(); });
 }
 
 function lockApp(message = '') {
@@ -970,7 +1251,11 @@ function lockApp(message = '') {
   state.errors = [];
   chart = null;
   for (const d of $$('dialog[open]')) d.close();
-  for (const id of ['#donut', '#allocLegend', '#historyChart', '#chartLegend', '#tableWrap', '#alerts', '#heroMeta', '#toasts']) $(id).innerHTML = '';
+  resetChat();
+  if (chat.open) setChatOpen(false);
+  for (const id of ['#donut', '#allocLegend', '#historyChart', '#chartLegend', '#tableWrap', '#alerts', '#heroMeta', '#toasts', '#newsList', '#newsFilter', '#newsSummary']) $(id).innerHTML = '';
+  Object.assign(news, { filter: 'all', error: null, limit: NEWS_PAGE });
+  $('#newsEngine').hidden = true;
   $('#netWorth').innerHTML = '<span class="skeleton w-200 h-40"></span>';
   $('#goldRate').hidden = true;
   $('#chartTip').hidden = true;
@@ -1078,14 +1363,14 @@ for (const ev of ['pointerdown', 'keydown', 'wheel', 'touchstart']) window.addEv
 setInterval(() => {
   if (!vault.unlocked) return;
   if (Date.now() - lastActivity > IDLE_LOCK_MS) { lockApp('Locked after 15 minutes of inactivity.'); return; }
-  if (!dialog.open && document.visibilityState === 'visible') load();
+  if (!dialog.open && document.visibilityState === 'visible') load().then(() => fetchNews());
 }, 60000);
 setInterval(() => { if (vault.unlocked) renderStatus(); }, 20000);
 // Mobile browsers pause timers in the background: check on return so an idle vault locks straight away.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !vault.unlocked) return;
   if (Date.now() - lastActivity > IDLE_LOCK_MS) lockApp('Locked after 15 minutes of inactivity.');
-  else if (!dialog.open) load();
+  else if (!dialog.open) load().then(() => fetchNews());
 });
 
 if (!globalThis.crypto?.subtle) {
@@ -1094,3 +1379,272 @@ if (!globalThis.crypto?.subtle) {
 } else {
   showLock();
 }
+
+// ---------- AI chat assistant ----------
+// The server runs an agent with web search, page reading, live news and live prices, and streams
+// its steps and answer back as NDJSON. Only holding names/symbols are shared, never amounts.
+// The conversation lives in memory only and is wiped on lock.
+const chat = { messages: [], busy: false, ctrl: null, open: false };
+const CHAT_SUGGESTIONS = [
+  'What is moving Nifty and Sensex today?',
+  'Any important news on my holdings this week?',
+  'Gold price in India today and the outlook',
+  'Summarise the latest RBI policy decision',
+];
+const STEP_ICON = { web_search: 'globe', news_search: 'news', fetch_url: 'file', get_quote: 'stock' };
+
+const safeUrl = (u) => (/^https?:\/\//i.test(u) ? u : '#');
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+
+/** Small, safe markdown renderer: input is escaped first, then a few constructs are re-enabled. */
+function mdInline(s) {
+  const codes = [];
+  return esc(s)
+    .replace(/`([^`\n]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`)
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t, u) => `<a href="${safeUrl(u)}" target="_blank" rel="noopener noreferrer">${t}</a>`)
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s<).,;:!?])/g, (_, p, u) => `${p}<a href="${safeUrl(u)}" target="_blank" rel="noopener noreferrer">${esc(hostOf(u.replace(/&amp;/g, '&')))}</a>`)
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, '$1<em>$2</em>')
+    .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+    .replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[i]}</code>`);
+}
+const LIST_RE = /^\s*([-*+]|\d+[.)])\s+/;
+function md(src) {
+  const lines = String(src || '').replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  let i = 0;
+  const isTableRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+  const cells = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\s*```/.test(l)) {
+      const buf = [];
+      i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++]);
+      i++;
+      out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`);
+    } else if (isTableRow(l) && /^[\s|:-]+$/.test(lines[i + 1] || '') && (lines[i + 1] || '').includes('-')) {
+      const head = cells(l);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && isTableRow(lines[i])) rows.push(cells(lines[i++]));
+      out.push(`<div class="md-table"><table><thead><tr>${head.map((c) => `<th>${mdInline(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${mdInline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+    } else if (/^#{1,6}\s/.test(l)) {
+      const n = Math.min(4, l.match(/^#+/)[0].length + 2);
+      out.push(`<h${n}>${mdInline(l.replace(/^#+\s*/, ''))}</h${n}>`);
+      i++;
+    } else if (LIST_RE.test(l)) {
+      const ordered = /^\s*\d/.test(l);
+      const items = [];
+      while (i < lines.length && LIST_RE.test(lines[i])) {
+        let item = lines[i++].replace(LIST_RE, '');
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !LIST_RE.test(lines[i])) item += ` ${lines[i++].trim()}`;
+        items.push(`<li>${mdInline(item)}</li>`);
+      }
+      out.push(ordered ? `<ol>${items.join('')}</ol>` : `<ul>${items.join('')}</ul>`);
+    } else if (/^\s*>/.test(l)) {
+      const buf = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) buf.push(lines[i++].replace(/^\s*>\s?/, ''));
+      out.push(`<blockquote>${mdInline(buf.join(' '))}</blockquote>`);
+    } else if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)) {
+      out.push('<hr>');
+      i++;
+    } else if (!l.trim()) {
+      i++;
+    } else {
+      const buf = [l];
+      i++;
+      while (i < lines.length && lines[i].trim() && !/^\s*(```|#{1,6}\s|>)/.test(lines[i]) && !LIST_RE.test(lines[i]) && !isTableRow(lines[i])) buf.push(lines[i++]);
+      out.push(`<p>${buf.map(mdInline).join('<br>')}</p>`);
+    }
+  }
+  return out.join('');
+}
+
+function chatStep(s) {
+  return `<li class="chat-step ${esc(s.status)}"><span class="${s.status === 'running' ? 'spinning' : ''}">${icon(s.status === 'error' ? 'alert' : STEP_ICON[s.tool] || 'sparkles')}</span><span class="lbl">${esc(s.label)}</span>${s.detail ? `<span class="det">${esc(s.detail)}</span>` : ''}</li>`;
+}
+function chatSources(list) {
+  if (!list?.length) return '';
+  return `<details class="chat-sources"><summary>${icon('globe')}${list.length} source${list.length === 1 ? '' : 's'}${icon('chevron', 'chev')}</summary><ol>${list.map((s) => `<li><a href="${esc(safeUrl(s.url))}" target="_blank" rel="noopener noreferrer"><span class="t">${esc(s.title || hostOf(s.url))}</span><span class="h">${esc(s.source || hostOf(s.url))}${s.publishedAt ? ` · ${esc(ago(s.publishedAt))}` : ''}</span></a></li>`).join('')}</ol></details>`;
+}
+function chatBubble(m, idx) {
+  if (m.role === 'user') return `<div class="chat-msg user"><div class="bubble">${esc(m.content)}</div></div>`;
+  const working = m.pending && !m.content;
+  return `<div class="chat-msg bot" data-idx="${idx}">
+    ${m.steps?.length ? `<ul class="chat-steps">${m.steps.map(chatStep).join('')}</ul>` : ''}
+    ${working && !m.steps?.some((s) => s.status === 'running') ? '<div class="chat-typing" aria-label="Thinking"><span></span><span></span><span></span></div>' : ''}
+    ${m.content ? `<div class="md">${md(m.content)}${m.pending ? '<span class="caret"></span>' : ''}</div>` : ''}
+    ${m.error ? `<p class="chat-error">${icon('alert')}<span>${esc(m.error)}</span>${m.retry ? '<button class="link" data-retry>Try again</button>' : ''}</p>` : ''}
+    ${!m.pending && m.content ? `<div class="chat-actions">${chatSources(m.sources)}<button class="icon-btn sm" data-copy="${idx}" aria-label="Copy answer">${icon('copy')}</button></div>` : ''}
+  </div>`;
+}
+function renderChat() {
+  const log = $('#chatLog');
+  if (!chat.messages.length) {
+    log.innerHTML = `<div class="chat-empty">
+      <span class="big-ic">${icon('sparkles')}</span>
+      <h3>Ask me anything</h3>
+      <p>I search the web, read pages, check live news and pull live prices, then answer with sources.</p>
+      <div class="chat-suggest">${CHAT_SUGGESTIONS.map((s) => `<button type="button" data-suggest="${esc(s)}">${esc(s)}</button>`).join('')}</div>
+    </div>`;
+  } else {
+    log.innerHTML = chat.messages.map(chatBubble).join('');
+  }
+  const send = $('#chatSend');
+  send.innerHTML = icon(chat.busy ? 'stop' : 'send');
+  send.setAttribute('aria-label', chat.busy ? 'Stop' : 'Send');
+  send.classList.toggle('stop', chat.busy);
+  $('#chatClear').disabled = !chat.messages.length;
+}
+let chatFrame = 0;
+function paintLast() {
+  if (chatFrame) return;
+  chatFrame = requestAnimationFrame(() => {
+    chatFrame = 0;
+    const log = $('#chatLog');
+    const idx = chat.messages.length - 1;
+    const el = log.querySelector(`.chat-msg.bot[data-idx="${idx}"]`);
+    const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    if (el && chat.messages[idx]) el.outerHTML = chatBubble(chat.messages[idx], idx);
+    else renderChat();
+    if (stick) log.scrollTop = log.scrollHeight;
+  });
+}
+
+function setChatOpen(open) {
+  chat.open = open;
+  $('#chat').hidden = !open;
+  $('#chatFab').hidden = open;
+  $('#chatFab').setAttribute('aria-expanded', String(open));
+  document.documentElement.classList.toggle('chat-open', open);
+  if (!open) { if (vault.unlocked) $('#chatFab').focus(); return; }
+  renderChat();
+  const log = $('#chatLog');
+  log.scrollTop = log.scrollHeight;
+  if (!matchMedia('(pointer: coarse)').matches) $('#chatInput').focus();
+  api('/chat/status').then((s) => {
+    $('#chatSub').textContent = s.enabled ? `Web search & live news · ${s.model}` : 'Not set up: add OLLAMA_API_KEY on the server';
+  }).catch(() => {});
+}
+
+function sendChat(text) {
+  const content = String(text || '').trim();
+  if (!content || chat.busy) return;
+  chat.messages.push({ role: 'user', content });
+  runChat();
+}
+
+async function runChat() {
+  const history = chat.messages.filter((m) => m.content).map((m) => ({ role: m.role, content: m.content }));
+  const bot = { role: 'assistant', content: '', steps: [], sources: [], pending: true };
+  const session = chat.messages;
+  chat.messages.push(bot);
+  chat.busy = true;
+  const ctrl = new AbortController();
+  chat.ctrl = ctrl;
+  renderChat();
+  $('#chatLog').scrollTop = $('#chatLog').scrollHeight;
+  const holdings = vault.unlocked ? newsHoldings().map(({ name, symbol, assetType }) => ({ name, symbol, assetType })) : [];
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history, holdings }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Request failed (${res.status})`);
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    let finished = false;
+    const handle = (line) => {
+      if (!line.trim()) return;
+      let ev;
+      try { ev = JSON.parse(line); } catch { return; }
+      if (ev.type === 'delta') bot.content += ev.text;
+      else if (ev.type === 'reset') bot.content = '';
+      else if (ev.type === 'step') {
+        const s = bot.steps.find((x) => x.id === ev.id);
+        if (s) Object.assign(s, ev); else bot.steps.push(ev);
+      } else if (ev.type === 'done') { bot.sources = ev.sources || []; finished = true; }
+      else if (ev.type === 'error') { bot.error = ev.message; bot.retry = true; finished = true; }
+      else return;
+      if (chat.messages === session) paintLast();
+    };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) { handle(buf.slice(0, nl)); buf = buf.slice(nl + 1); }
+    }
+    handle(buf + dec.decode());
+    if (!finished && !bot.error) { bot.error = 'The connection closed before the answer finished.'; bot.retry = true; }
+  } catch (err) {
+    if (err.name === 'AbortError') { if (!bot.content) bot.error = 'Stopped.'; } else {
+      bot.error = /fetch|network/i.test(err.message) ? 'Cannot reach the Asset Tracker server.' : err.message;
+      bot.retry = true;
+    }
+  } finally {
+    bot.pending = false;
+    for (const s of bot.steps) if (s.status === 'running') s.status = 'error';
+    if (chat.ctrl === ctrl) { chat.busy = false; chat.ctrl = null; }
+    if (chat.messages === session && !$('#chat').hidden) {
+      renderChat();
+      const log = $('#chatLog');
+      if (log.scrollHeight - log.scrollTop - log.clientHeight < 240) log.scrollTop = log.scrollHeight;
+    }
+  }
+}
+
+/** Forget the conversation (new chat, or the vault was locked). */
+function resetChat() {
+  chat.ctrl?.abort();
+  chat.ctrl = null;
+  chat.busy = false;
+  chat.messages = [];
+  if (!$('#chat').hidden) renderChat();
+}
+
+const chatInput = $('#chatInput');
+const growInput = () => { chatInput.style.height = 'auto'; chatInput.style.height = `${Math.min(chatInput.scrollHeight, 160)}px`; };
+chatInput.addEventListener('input', growInput);
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); $('#chatForm').requestSubmit(); }
+});
+$('#chatForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (chat.busy) { chat.ctrl?.abort(); return; }
+  const text = chatInput.value;
+  if (!text.trim()) return;
+  chatInput.value = '';
+  growInput();
+  sendChat(text);
+});
+$('#chatFab').addEventListener('click', () => setChatOpen(true));
+$('#chatClose').addEventListener('click', () => setChatOpen(false));
+$('#chatClear').addEventListener('click', () => { resetChat(); chatInput.focus(); });
+$('#chat').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); setChatOpen(false); } });
+$('#chatLog').addEventListener('click', async (e) => {
+  const sug = e.target.closest('[data-suggest]');
+  if (sug) { sendChat(sug.dataset.suggest); return; }
+  if (e.target.closest('[data-retry]')) {
+    if (chat.busy) return;
+    while (chat.messages.length && chat.messages.at(-1).role === 'assistant') chat.messages.pop();
+    if (chat.messages.length) runChat();
+    return;
+  }
+  const copy = e.target.closest('[data-copy]');
+  if (copy) {
+    try { await navigator.clipboard.writeText(chat.messages[Number(copy.dataset.copy)]?.content || ''); toast('Answer copied', 'success'); } catch { toast('Could not copy', 'error'); }
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (!vault.unlocked || chat.open || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
+  if (e.target.closest('input, select, textarea, [contenteditable]')) return;
+  if (e.key.toLowerCase() === 'a') { e.preventDefault(); setChatOpen(true); }
+});

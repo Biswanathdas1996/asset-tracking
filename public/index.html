@@ -59,7 +59,18 @@
     <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></symbol>
     <symbol id="i-gem" viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></symbol>
     <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8Z"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.13a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.13 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.13a.5.5 0 0 1-.96 0z"/><path d="M20 3v4M22 5h-4"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
     <symbol id="i-cmd" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M14.54 21.69a.5.5 0 0 0 .94-.03l6.5-19a.5.5 0 0 0-.64-.63l-19 6.5a.5.5 0 0 0-.02.93l7.93 3.18a2 2 0 0 1 1.11 1.11z"/><path d="m21.85 2.15-10.94 10.94"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M16 13H8M16 17H8M10 9H8"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+    <symbol id="i-eraser" viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7M5 11l9 9"/></symbol>
   </svg>
 
   <!-- ============ Lock screen ============ -->
@@ -133,6 +144,8 @@
               <div class="hero-meta" id="heroMeta"><span class="skeleton w-160"></span></div>
             </div>
             <div class="seg" id="rangeSeg" role="tablist" aria-label="Chart range">
+              <button data-range="1" role="tab" title="Daily">1D</button>
+              <button data-range="7" role="tab" title="Weekly">1W</button>
               <button data-range="30" role="tab">1M</button>
               <button data-range="90" role="tab">3M</button>
               <button data-range="180" role="tab">6M</button>
@@ -183,12 +196,55 @@
         <div id="tableWrap" class="table-wrap"></div>
       </section>
 
+      <section class="card news" id="news" aria-labelledby="newsTitle">
+        <div class="news-head">
+          <div class="news-title-wrap">
+            <span class="news-ic" aria-hidden="true"><svg class="i"><use href="#i-sparkles"/></svg></span>
+            <h2 id="newsTitle">News</h2>
+            <span class="news-status" id="newsStatus">Scanning…</span>
+          </div>
+          <div class="news-tools">
+            <span class="pill" id="newsEngine" hidden></span>
+            <div class="seg" id="newsSeg" role="tablist" aria-label="News view">
+              <button data-view="flagged" role="tab">Flagged <span class="count" id="newsFlagCount"></span></button>
+              <button data-view="all" role="tab">All</button>
+            </div>
+            <button id="newsRefresh" class="icon-btn" data-tip="Rescan news" aria-label="Rescan news"><svg class="i"><use href="#i-refresh"/></svg></button>
+          </div>
+        </div>
+        <div class="news-summary" id="newsSummary" hidden></div>
+        <div class="news-filter" id="newsFilter" role="toolbar" aria-label="Filter news by holding"></div>
+        <div class="news-list" id="newsList" aria-live="polite"></div>
+      </section>
+
       <footer class="footnote">
         <svg class="i"><use href="#i-shield"/></svg>
         <span>Encrypted in this browser with your passphrase (AES-256-GCM). Clearing site data deletes it, so <button class="link" id="footBackup">download a backup</button> now and then.</span>
-        <span class="shortcuts"><kbd>N</kbd> add · <kbd>R</kbd> refresh · <kbd>/</kbd> filter · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> tabs</span>
+        <span class="shortcuts"><kbd>N</kbd> add · <kbd>R</kbd> refresh · <kbd>/</kbd> filter · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> tabs · <kbd>A</kbd> ask AI</span>
       </footer>
     </main>
+
+    <button id="chatFab" class="chat-fab" aria-label="Ask AI" aria-controls="chat" aria-expanded="false"><svg class="i"><use href="#i-sparkles"/></svg><span>Ask AI</span></button>
+
+    <aside id="chat" class="chat" role="dialog" aria-modal="false" aria-labelledby="chatTitle" hidden>
+      <header class="chat-head">
+        <span class="news-ic" aria-hidden="true"><svg class="i"><use href="#i-sparkles"/></svg></span>
+        <div class="chat-title">
+          <h2 id="chatTitle">Ask AI</h2>
+          <span class="chat-sub" id="chatSub">Searches the web and live news</span>
+        </div>
+        <button id="chatClear" class="icon-btn sm" data-tip="New chat" aria-label="New chat"><svg class="i"><use href="#i-eraser"/></svg></button>
+        <button id="chatClose" class="icon-btn sm" aria-label="Close chat"><svg class="i"><use href="#i-x"/></svg></button>
+      </header>
+      <div class="chat-log" id="chatLog" aria-live="polite"></div>
+      <form class="chat-form" id="chatForm" autocomplete="off">
+        <div class="chat-input">
+          <textarea id="chatInput" rows="1" placeholder="Ask anything: markets, news, any topic…" aria-label="Message" maxlength="6000"></textarea>
+          <button type="submit" class="chat-send" id="chatSend" aria-label="Send"><svg class="i"><use href="#i-send"/></svg></button>
+        </div>
+        <p class="chat-foot">Shares holding names only, never amounts. Answers can be wrong, so check the sources.</p>
+      </form>
+    </aside>
   </div>
 
   <!-- ============ Dialogs ============ -->

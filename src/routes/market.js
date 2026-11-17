@@ -3,6 +3,7 @@ import * as yahoo from '../services/yahoo.js';
 import * as coingecko from '../services/coingecko.js';
 import * as crypto from '../services/crypto.js';
 import * as gold from '../services/gold.js';
+import * as shareholding from '../services/shareholding.js';
 import { asyncRoute, BadRequest, normalizeStockSymbol, pastOrTodayDate } from './util.js';
 
 const r = Router();
@@ -30,6 +31,15 @@ r.get('/quote/crypto/:id', asyncRoute(async (req, res) => {
   res.json(out);
 }));
 
-r.get('/quote/gold', asyncRoute(async (req, res) => res.json(await gold.getLivePrice())));
+// GET /api/shareholding?symbols=RELIANCE.NS,TCS.NS -> { [symbol]: { fii, dii, asOf } | null }
+r.get('/shareholding', asyncRoute(async (req, res) => {
+  const symbols = String(req.query.symbols || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (!symbols.length) throw new BadRequest('symbols is required');
+  if (symbols.length > 60) throw new BadRequest('At most 60 symbols per request');
+  res.set('Cache-Control', 'private, max-age=3600');
+  res.json(await shareholding.getShareholdingMany(symbols));
+}));
+
+r.get('/quote/gold',asyncRoute(async (req, res) => res.json(await gold.getLivePrice())));
 
 export default r;

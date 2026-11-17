@@ -39,6 +39,21 @@ export async function getJson(url, { headers = {}, timeoutMs = 15000, retries = 
   throw lastErr instanceof UpstreamError ? lastErr : new UpstreamError(`Market data request failed: ${lastErr?.message}`);
 }
 
+/** Fetch a text body (RSS / XML feeds). */
+export async function getText(url, { headers = {}, timeoutMs = 15000 } = {}) {
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (asset-tracker)', Accept: 'application/rss+xml, application/xml, text/xml, */*', ...headers },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    throw new UpstreamError(`News request failed: ${err.message}`);
+  }
+  if (!res.ok) throw new UpstreamError(`${new URL(url).host} responded ${res.status}`);
+  return res.text();
+}
+
 /** Tiny TTL cache so repeated page loads don't hammer the free APIs. */
 export function ttlCache() {
   const store = new Map();

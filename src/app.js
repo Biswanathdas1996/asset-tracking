@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import marketRoutes from './routes/market.js';
 import valuationRoutes from './routes/valuation.js';
+import newsRoutes from './routes/news.js';
+import chatRoutes from './routes/chat.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,6 +18,8 @@ export function createApp() {
   app.get('/api/health', (req, res) => res.json({ ok: true }));
   app.use('/api', marketRoutes);
   app.use('/api', valuationRoutes);
+  app.use('/api', newsRoutes);
+  app.use('/api', chatRoutes);
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
   app.use(express.static(path.join(here, '..', 'public')));
