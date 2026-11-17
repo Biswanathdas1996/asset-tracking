@@ -8,6 +8,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 export function createApp() {
   const app = express();
+  // Behind Railway's (or any) reverse proxy: trust X-Forwarded-* headers.
+  app.set('trust proxy', 1);
   // Gold SIP ledgers (daily SIPs over several years) are sent back for revaluation, so allow a roomy body.
   app.use(express.json({ limit: '20mb' }));
 

@@ -102,3 +102,14 @@ public/
 test/                  node:test unit + API tests
 setup.bat start.bat stop.bat
 ```
+
+## Deploy to Railway
+
+The repo includes [`railway.json`](railway.json) (build with Railpack, start with `npm start`, health check on `/api/health`) and pins Node 22 via `.nvmrc`.
+
+1. Push this repo to GitHub.
+2. In Railway: **New Project → Deploy from GitHub repo** and pick it.
+3. Optional: under **Variables**, set `PRICE_CACHE_SECONDS`, `GOLD_IMPORT_DUTY_PCT` or `COINGECKO_API_KEY`. Don't set `PORT`; Railway provides it.
+4. Under **Settings → Networking**, click **Generate Domain** to get a public `https://….up.railway.app` URL.
+
+The server keeps no state, so no database or volume is needed. Your data stays encrypted in the browser, tied to the Railway domain: data saved at `http://localhost:4000` won't show up there. Move it with **Backup** locally and **Restore from backup file** on the deployed site.

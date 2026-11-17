@@ -2,7 +2,7 @@ import { config } from './config.js';
 import { createApp } from './app.js';
 
 const app = createApp();
-const server = app.listen(config.port, () => console.log(`Asset tracker running at http://localhost:${config.port}`));
+const server = app.listen(config.port, '0.0.0.0', () => console.log(`Asset tracker listening on port ${config.port}`));
 
 const shutdown = () => {
   server.close();
