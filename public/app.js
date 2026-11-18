@@ -420,20 +420,26 @@ function renderTable() {
 }
 
 // ---------- history chart ----------
-/** Chart points by day: backfilled market history, overridden by recorded snapshots, ending with today's live total. */
+/**
+ * Chart points by day, ending with today's live total. The history rebuilt from each asset's own
+ * daily prices is the source of truth; recorded snapshots only stand in when it isn't available,
+ * since they miss holdings added later with an earlier buy date.
+ */
 function chartSeries() {
   const d = vault.data;
   const byDay = new Map();
-  for (const p of d.meta.history?.points || []) byDay.set(p.date, { invested: p.invested, value: p.value, pnl: p.value - p.invested });
-  for (const s of d.snapshots) byDay.set(s.at.slice(0, 10), s.total);
+  const history = d.meta.history?.points || [];
+  if (history.length) for (const p of history) byDay.set(p.date, { invested: p.invested, value: p.value, pnl: p.value - p.invested });
+  else for (const s of d.snapshots) byDay.set(s.at.slice(0, 10), s.total);
   if (state.data && (d.holdings.length || d.goldSips.length)) byDay.set(today(), state.data.summary.total);
   return [...byDay].sort((a, b) => a[0].localeCompare(b[0])).map(([at, total]) => ({ at, total }));
 }
 
-const HISTORY_VERSION = 2; // bump when the server's history source changes, to drop cached points
+const HISTORY_VERSION = 3; // bump when the server's history source changes, to drop cached points
+const HISTORY_RETRY_MS = 15 * 60000; // re-fetch a partial history (some prices missing) after this long
 const historyKey = (d) => `v${HISTORY_VERSION}|${today()}|${JSON.stringify([
-  d.holdings.map((h) => [h._id, h.quantity, h.buyDate, h.investedValue]),
-  d.goldSips.map((s) => [s._id, s.installmentCount, s.totalInvested]),
+  d.holdings.map((h) => [h._id, h.assetType, h.symbol, h.coinId, h.quantity, h.buyDate, h.buyPrice, h.investedValue]),
+  d.goldSips.map((s) => [s._id, s.installmentCount, s.totalInvested, s.totalGrams]),
 ])}`;
 
 /** Backfill the chart from historical prices once per day, or when holdings change. Cached in the vault. */
@@ -442,7 +448,8 @@ async function fetchHistory() {
   const d = vault.data;
   if (!d.holdings.length && !d.goldSips.length) { if (d.meta.history) { delete d.meta.history; await vault.save(); renderHistory(); } return; }
   const key = historyKey(d);
-  if (d.meta.history?.key === key) return;
+  const cached = d.meta.history;
+  if (cached?.key === key && (!cached.errors?.length || Date.now() - (cached.at || 0) < HISTORY_RETRY_MS)) return;
   state.historyLoading = true;
   renderHistory();
   const startVersion = version;
@@ -450,12 +457,12 @@ async function fetchHistory() {
     const r = await api('/portfolio/history', {
       method: 'POST',
       body: {
-        holdings: d.holdings.map(({ assetType, symbol, quantity, buyDate, investedValue, name }) => ({ assetType, symbol, quantity, buyDate, investedValue, name })),
+        holdings: d.holdings.map(({ assetType, symbol, coinId, quantity, buyDate, buyPrice, investedValue, name }) => ({ assetType, symbol, coinId, quantity, buyDate, buyPrice, investedValue, name })),
         goldSips: d.goldSips.map(({ installments }) => ({ installments })),
       },
     });
     if (!vault.unlocked || version !== startVersion) return;
-    vault.data.meta.history = { key, points: r.points };
+    vault.data.meta.history = { key, points: r.points, errors: r.errors || [], at: Date.now() };
     await vault.save();
     chartAnimate = true;
   } catch { /* offline or upstream error: the chart falls back to recorded snapshots */ } finally {
@@ -525,6 +532,7 @@ function renderHistory() {
   }
   chartAnimate = false;
   legend.innerHTML = `<span class="key"><span class="ln"></span>Value</span><span class="key"><span class="ln dash"></span>Invested</span>
+    ${vault.data.meta.history?.errors?.length ? `<span class="key partial" title="${esc(vault.data.meta.history.errors.join('\n'))}">${icon('alert')}Some past prices missing</span>` : ''}
     <span class="range-delta ${cls(delta)}">${signed(delta, inr0)} P&amp;L ${state.range ? `in ${$('#rangeSeg .active')?.textContent}` : 'since start'}</span>`;
 }
 

@@ -103,6 +103,30 @@ test('rebuilds portfolio value history from daily closes', async () => {
   assert.ok(points.every((p, i) => !i || p.date > points[i - 1].date), 'dates ascend');
 });
 
+test('history is one point per day and carries a lot at its buy price before its first close', async () => {
+  const res = await request(app).post('/api/portfolio/history').send({
+    holdings: [{ assetType: 'stock', symbol: 'RELIANCE.NS', quantity: 10, buyDate: '2024-03-10', buyPrice: 1380, investedValue: 13810 }],
+    goldSips: [],
+  });
+  assert.equal(res.status, 200, res.body.error);
+  const { points } = res.body;
+  assert.equal(points[0].date, '2024-03-10');
+  assert.deepEqual([points[0].value, points[0].invested], [13800, 13810]);
+  assert.equal(points.find((p) => p.date === '2024-03-14').value, 13900);
+  assert.ok(points.every((p, i) => !i || Date.parse(p.date) - Date.parse(points[i - 1].date) === 86400000), 'daily, no gaps');
+  assert.deepEqual(res.body.errors, []);
+});
+
+test('history reports assets with no price data and values them at cost', async () => {
+  const res = await request(app).post('/api/portfolio/history').send({
+    holdings: [{ assetType: 'stock', symbol: 'BAD.NS', name: 'Bad Co', quantity: 1, buyDate: '2026-01-01', investedValue: 500 }],
+    goldSips: [],
+  });
+  assert.equal(res.status, 200, res.body.error);
+  assert.ok(res.body.points.every((p) => p.value === 500));
+  assert.match(res.body.errors.join(), /Bad Co: no price history/);
+});
+
 test('history rejects non-array input', async () => {
   const res = await request(app).post('/api/portfolio/history').send({ holdings: 'x' });
   assert.equal(res.status, 400);

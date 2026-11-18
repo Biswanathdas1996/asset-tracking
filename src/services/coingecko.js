@@ -82,6 +82,21 @@ export async function getPriceInr(id) {
 }
 
 /**
+ * Daily INR closes for a coin over the last `days` (max 365 on the free API), ascending as
+ * [{ date, close }] (same shape as yahoo.getDailyCloses).
+ */
+export async function getDailyCloses(id, days) {
+  const n = Math.max(1, Math.min(365, Math.ceil(days)));
+  return cache.get(`series:${id}:${n}`, 6 * 3600 * 1000, async () => {
+    const qs = new URLSearchParams({ vs_currency: 'inr', days: String(n), interval: 'daily' });
+    const data = await getJson(`${BASE}/coins/${encodeURIComponent(id)}/market_chart?${qs}`, { headers: headers() });
+    const byDate = new Map();
+    for (const [ms, price] of data?.prices || []) if (typeof price === 'number' && price > 0) byDate.set(toDateKey(new Date(ms)), price);
+    return [...byDate].sort((a, b) => a[0].localeCompare(b[0])).map(([date, close]) => ({ date, close }));
+  });
+}
+
+/**
  * INR price of a coin on a past date. CoinGecko's free API only serves the last 365 days of
  * history, so older dates fall back to Yahoo Finance's SYMBOL-INR daily series.
  */
