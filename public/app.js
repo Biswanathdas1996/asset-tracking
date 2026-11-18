@@ -4,10 +4,18 @@ import { summarize, addSnapshot, upsert, newId } from './portfolio.js';
 // ---------- formatting helpers ----------
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
-const inr0 = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
-const inrC = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', notation: 'compact', maximumFractionDigits: 1 });
-const qty = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 8 });
+let privacy = false;
+try { privacy = localStorage.getItem('privacy') === '1'; } catch { /* storage unavailable */ }
+const MASK = '••••';
+function money(options) {
+  const fmt = new Intl.NumberFormat('en-IN', options);
+  return { format: (n) => (privacy ? '₹••••' : fmt.format(n)) };
+}
+const inr = money({ style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
+const inr0 = money({ style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+const inrC = money({ style: 'currency', currency: 'INR', notation: 'compact', maximumFractionDigits: 1 });
+const _qty = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 8 });
+const qty = { format: (n) => (privacy ? MASK : _qty.format(n)) };
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—');
 const fmtShort = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 const today = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
@@ -15,7 +23,18 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const cls = (n) => (n > 0 ? 'gain' : n < 0 ? 'loss' : '');
 const chipCls = (n) => (n > 0 ? 'gain' : n < 0 ? 'loss' : 'flat');
 const signed = (n, f = inr) => (n == null ? '—' : `${n > 0 ? '+' : ''}${f.format(n)}`);
-const pct = (n) => (n == null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(2)}%`);
+const pct = (n) => (n == null ? '—' : privacy ? '••%' : `${n > 0 ? '+' : ''}${n.toFixed(2)}%`);
+const fixed = (n, digits) => (privacy ? MASK : Number(n).toFixed(digits));
+const shareLabel = (n) => (privacy ? '••' : Number(n).toFixed(1));
+/** Hide rupee amounts and percents inside free text (chat) while privacy is on. */
+function redactNumbers(s) {
+  if (!privacy || s == null) return s == null ? '' : String(s);
+  return String(s)
+    .replace(/₹\s*[\d,]+(?:\.\d+)?/g, '₹••••')
+    .replace(/\b(?:rs\.?|inr)\s*[\d,]+(?:\.\d+)?/gi, '₹••••')
+    .replace(/\b\d[\d,]*(?:\.\d+)?\s*%/g, '••%')
+    .replace(/\b\d[\d,]*(?:\.\d+)?\s*(?:lakh|lakhs|crore|crores|cr|k)\b/gi, '••••');
+}
 const icon = (name, c = '') => `<svg class="i ${c}"><use href="#i-${name}"/></svg>`;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const shortSym = (s) => String(s || '').replace(/\.(NS|BO)$/i, '');
@@ -104,6 +123,29 @@ function applyTheme(t) {
 $('#themeBtn').addEventListener('click', () => applyTheme({ system: 'light', light: 'dark', dark: 'system' }[theme]));
 applyTheme(theme);
 
+function applyPrivacy(on) {
+  privacy = on;
+  if (on) document.documentElement.dataset.privacy = 'on';
+  else delete document.documentElement.dataset.privacy;
+  const btn = $('#privacyBtn');
+  btn.innerHTML = icon(on ? 'eye-off' : 'eye');
+  btn.dataset.tip = on ? 'Show numbers (H)' : 'Hide numbers (H)';
+  btn.setAttribute('aria-label', on ? 'Show numbers' : 'Hide numbers');
+  btn.setAttribute('aria-pressed', String(on));
+  try {
+    if (on) localStorage.setItem('privacy', '1');
+    else localStorage.removeItem('privacy');
+  } catch { /* storage unavailable */ }
+}
+$('#privacyBtn').addEventListener('click', () => {
+  applyPrivacy(!privacy);
+  if (!vault.unlocked) return;
+  render();
+  if ($('#dialog').open) updatePreview();
+  if (chat.messages.length) renderChat();
+});
+applyPrivacy(privacy);
+
 // ---------- rendering ----------
 const companyLogo = (symbol) => (symbol ? `/api/logo/${encodeURIComponent(symbol)}` : '');
 const cryptoLogo = (r) => {
@@ -118,10 +160,14 @@ const assetInitials = (r, type) => (type === 'gold' ? 'Au' : shortSym(r.symbol).
 let shownNet = null;
 function setNetWorth(v) {
   const el = $('#netWorth');
-  const html = (n) => { const [a, b = '00'] = inr.format(n).split('.'); return `${a}<span class="paise">.${b}</span>`; };
+  const html = (n) => {
+    if (privacy) return '₹••••';
+    const [a, b = '00'] = inr.format(n).split('.');
+    return `${a}<span class="paise">.${b}</span>`;
+  };
   const from = shownNet;
   shownNet = v;
-  if (from == null || from === v || reducedMotion()) { el.innerHTML = html(v); return; }
+  if (privacy || from == null || from === v || reducedMotion()) { el.innerHTML = html(v); return; }
   const t0 = performance.now(), dur = 700;
   const step = (t) => {
     if (shownNet !== v) return;
@@ -187,7 +233,7 @@ function renderAlloc(s, goldPrice) {
     return `<li data-k="${k}" style="--c:${m.color}" role="button" tabindex="0" aria-pressed="${on}"${classes ? ` class="${classes}"` : ''}>
       <span class="al-ic">${icon(m.icon)}</span>
       <span class="al-main">
-        <span class="al-row"><span class="nm">${m.label}</span><span class="pc">${sh.toFixed(1)}<small>%</small></span></span>
+        <span class="al-row"><span class="nm">${m.label}</span><span class="pc">${shareLabel(sh)}<small>%</small></span></span>
         <span class="al-row al-sub"><span class="vl">${inr0.format(b.value)}</span>${b.invested ? `<span class="mini-chip ${chipCls(b.pnl)}">${signed(b.pnl, inrC)} · ${pct(b.pnlPercent)}</span>` : ''}</span>
         <span class="al-meta">${meta}</span>
       </span>
@@ -212,7 +258,7 @@ function paintAlloc(hoverK) {
   $$('[data-k]', card).forEach((n) => n.classList.toggle('hot', !!k && n.dataset.k === k));
   const b = k ? s[k] : s.total;
   const label = k ? META[k].label : total ? 'Total value' : 'No assets yet';
-  const hint = k && total ? `${((b.value / total) * 100).toFixed(1)}% of portfolio` : '';
+  const hint = k && total ? `${shareLabel((b.value / total) * 100)}% of portfolio` : '';
   $('#donutCenter').innerHTML = `<span>${label}</span><b>${total ? inrC.format(b.value) : '₹0'}</b>${hint ? `<em>${hint}</em>` : ''}`;
   $('#allocSummary').innerHTML = `<div><span class="lbl">${label}</span><b>${inr0.format(b.value)}</b></div>
     ${total ? `<span class="mini-chip ${chipCls(b.pnl)}">${signed(b.pnl, inrC)} · ${pct(b.pnlPercent)}</span>` : ''}
@@ -312,10 +358,10 @@ function shpCard(label, t) {
   const width = Math.max(0, Math.min(100, t.pct));
   const flow = ch == null ? '' : ch === 0
     ? '<span class="shp-flow flat">Unchanged</span>'
-    : `<span class="shp-flow ${tone}">${ch > 0 ? '▲' : '▼'} ${Math.abs(ch).toFixed(2)}%<span class="shp-dir">${ch > 0 ? 'inflow' : 'outflow'}</span></span>`;
+    : `<span class="shp-flow ${tone}">${ch > 0 ? '▲' : '▼'} ${privacy ? '••' : Math.abs(ch).toFixed(2)}%<span class="shp-dir">${ch > 0 ? 'inflow' : 'outflow'}</span></span>`;
   return `<div class="shp-card ${tone}">
     <span class="shp-k">${label}</span>
-    <span class="shp-pct">${t.pct.toFixed(2)}<span class="shp-unit">%</span></span>
+    <span class="shp-pct">${privacy ? '••' : t.pct.toFixed(2)}<span class="shp-unit">%</span></span>
     ${flow}
     <span class="shp-bar" aria-hidden="true"><span style="width:${width.toFixed(2)}%"></span></span>
   </div>`;
@@ -367,7 +413,7 @@ function goldTable(all) {
           <div class="sub">${inr.format(s.sipAmount)} ${esc(s.frequency)} · GST ${s.gstPercent}% ${s.gstInclusive ? 'incl.' : 'extra'} · since ${fmtDate(s.startDate)}${s.endDate ? ` → ${fmtDate(s.endDate)}` : ''}</div></div></div>${rowActions(s._id)}</td>
         <td class="num" data-label="Installments">${s.installmentCount ?? 0}<div class="sub">${s.nextInstallmentDate ? `next ${fmtDate(s.nextInstallmentDate)}` : 'done'}</div></td>
         <td class="num" data-label="Invested">${inr.format(s.totalInvested || 0)}<div class="sub">GST ${inr.format(s.totalGst || 0)}</div></td>
-        <td class="num" data-label="Gold held">${(s.totalGrams || 0).toFixed(4)} g<div class="sub">avg ${inr.format(s.avgCostPerGram || 0)}/g</div></td>
+        <td class="num" data-label="Gold held">${fixed(s.totalGrams || 0, 4)} g<div class="sub">avg ${inr.format(s.avgCostPerGram || 0)}/g</div></td>
         <td class="num hide-sm" data-label="Live rate">${s.currentPricePerGram ? `${inr.format(s.currentPricePerGram)}/g` : '—'}</td>
         <td class="num" data-label="Value"><b>${s.currentValue != null ? inr.format(s.currentValue) : '—'}</b></td>
         <td class="num" data-label="P&amp;L"><div class="pnl-cell"><span class="${cls(s.pnl)}">${signed(s.pnl)}</span><span class="mini-chip ${chipCls(s.pnl)}">${pct(s.pnlPercent)}</span></div></td>
@@ -516,7 +562,7 @@ function renderHistory() {
     <defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" style="stop-color:var(--line);stop-opacity:.28"/><stop offset="1" style="stop-color:var(--line);stop-opacity:0"/></linearGradient></defs>
     <g class="grid">${ticks.map((v) => `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>`).join('')}</g>
-    <g class="axis">${ticks.map((v) => `<text x="${P.l + 2}" y="${(y(v) - 5).toFixed(1)}">${inrC.format(v)}</text>`).join('')}
+    <g class="axis">${privacy ? '' : ticks.map((v) => `<text x="${P.l + 2}" y="${(y(v) - 5).toFixed(1)}">${inrC.format(v)}</text>`).join('')}
       ${xl.map((i, n) => `<text x="${x(i).toFixed(1)}" y="${H - 6}" text-anchor="${['start', 'middle', 'end'][n]}">${fmtShort(pts[i].at)}</text>`).join('')}</g>
     <path class="area" d="${area}" fill="url(#areaGrad)"/>
     <path class="i-line" d="${path('invested')}"/>
@@ -1037,7 +1083,7 @@ async function updatePreview() {
     const incl = f.get('gstInclusive') === 'on';
     const net = incl ? amt / (1 + g / 100) : amt;
     const rate = state.data?.goldPrice?.pricePerGram;
-    setPreview(`Each debit <b>${inr.format(incl ? amt : amt * (1 + g / 100))}</b> → <b>${inr.format(net)}</b> buys gold${rate ? ` ≈ <b>${(net / rate).toFixed(4)} g</b> at today's rate` : ''}. Past installments are valued at each day's gold rate.`);
+    setPreview(`Each debit <b>${inr.format(incl ? amt : amt * (1 + g / 100))}</b> → <b>${inr.format(net)}</b> buys gold${rate ? ` ≈ <b>${fixed(net / rate, 4)} g</b> at today's rate` : ''}. Past installments are valued at each day's gold rate.`);
     return;
   }
   if (!picked) { setPreview(''); return; }
@@ -1174,7 +1220,7 @@ $('#tableWrap').addEventListener('toggle', (e) => {
   if (!sip) return;
   d.dataset.loaded = '1';
   d.querySelector('.scroll').innerHTML = `<table><thead><tr><th>Date</th><th class="num">Paid</th><th class="num">GST</th><th class="num">Rate / g</th><th class="num">Grams</th></tr></thead>
-    <tbody>${[...(sip.installments || [])].reverse().map((i) => `<tr><td>${fmtDate(i.date)}</td><td class="num">${inr.format(i.amountPaid)}</td><td class="num">${inr.format(i.gst)}</td><td class="num">${inr.format(i.pricePerGram)}</td><td class="num">${i.grams.toFixed(4)}</td></tr>`).join('')}</tbody></table>`;
+    <tbody>${[...(sip.installments || [])].reverse().map((i) => `<tr><td>${fmtDate(i.date)}</td><td class="num">${inr.format(i.amountPaid)}</td><td class="num">${inr.format(i.gst)}</td><td class="num">${inr.format(i.pricePerGram)}</td><td class="num">${fixed(i.grams, 4)}</td></tr>`).join('')}</tbody></table>`;
 }, true);
 
 // Keyboard shortcuts
@@ -1185,6 +1231,7 @@ document.addEventListener('keydown', (e) => {
   if (k === '/') { e.preventDefault(); $('#filter').focus(); }
   else if (k === 'n') { e.preventDefault(); openForm(state.tab); }
   else if (k === 'r') { e.preventDefault(); load(true); }
+  else if (k === 'h') { e.preventDefault(); $('#privacyBtn').click(); }
   else if (['1', '2', '3'].includes(k)) setTab(KEYS[Number(k) - 1]);
 });
 
@@ -1495,19 +1542,19 @@ function md(src) {
 }
 
 function chatStep(s) {
-  return `<li class="chat-step ${esc(s.status)}"><span class="${s.status === 'running' ? 'spinning' : ''}">${icon(s.status === 'error' ? 'alert' : STEP_ICON[s.tool] || 'sparkles')}</span><span class="lbl">${esc(s.label)}</span>${s.detail ? `<span class="det">${esc(s.detail)}</span>` : ''}</li>`;
+  return `<li class="chat-step ${esc(s.status)}"><span class="${s.status === 'running' ? 'spinning' : ''}">${icon(s.status === 'error' ? 'alert' : STEP_ICON[s.tool] || 'sparkles')}</span><span class="lbl">${esc(s.label)}</span>${s.detail ? `<span class="det">${esc(redactNumbers(s.detail))}</span>` : ''}</li>`;
 }
 function chatSources(list) {
   if (!list?.length) return '';
   return `<details class="chat-sources"><summary>${icon('globe')}${list.length} source${list.length === 1 ? '' : 's'}${icon('chevron', 'chev')}</summary><ol>${list.map((s) => `<li><a href="${esc(safeUrl(s.url))}" target="_blank" rel="noopener noreferrer"><span class="t">${esc(s.title || hostOf(s.url))}</span><span class="h">${esc(s.source || hostOf(s.url))}${s.publishedAt ? ` · ${esc(ago(s.publishedAt))}` : ''}</span></a></li>`).join('')}</ol></details>`;
 }
 function chatBubble(m, idx) {
-  if (m.role === 'user') return `<div class="chat-msg user"><div class="bubble">${esc(m.content)}</div></div>`;
+  if (m.role === 'user') return `<div class="chat-msg user"><div class="bubble">${esc(redactNumbers(m.content))}</div></div>`;
   const working = m.pending && !m.content;
   return `<div class="chat-msg bot" data-idx="${idx}">
     ${m.steps?.length ? `<ul class="chat-steps">${m.steps.map(chatStep).join('')}</ul>` : ''}
     ${working && !m.steps?.some((s) => s.status === 'running') ? '<div class="chat-typing" aria-label="Thinking"><span></span><span></span><span></span></div>' : ''}
-    ${m.content ? `<div class="md">${md(m.content)}${m.pending ? '<span class="caret"></span>' : ''}</div>` : ''}
+    ${m.content ? `<div class="md">${md(redactNumbers(m.content))}${m.pending ? '<span class="caret"></span>' : ''}</div>` : ''}
     ${m.error ? `<p class="chat-error">${icon('alert')}<span>${esc(m.error)}</span>${m.retry ? '<button class="link" data-retry>Try again</button>' : ''}</p>` : ''}
     ${!m.pending && m.content ? `<div class="chat-actions">${chatSources(m.sources)}<button class="icon-btn sm" data-copy="${idx}" aria-label="Copy answer">${icon('copy')}</button></div>` : ''}
   </div>`;

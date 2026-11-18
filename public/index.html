@@ -17,7 +17,11 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <script>
     // Apply the saved theme before first paint to avoid a flash.
-    try { const t = localStorage.getItem('theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch { /* storage unavailable */ }
+    try {
+      const t = localStorage.getItem('theme');
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      if (localStorage.getItem('privacy') === '1') document.documentElement.dataset.privacy = 'on';
+    } catch { /* storage unavailable */ }
   </script>
   <script>
     // Block pinch zoom (iOS Safari ignores user-scalable=no).
@@ -122,6 +126,7 @@
           </div>
         </div>
         <div class="top-actions">
+          <button id="privacyBtn" class="icon-btn" data-tip="Hide numbers (H)" aria-label="Hide numbers" aria-pressed="false"><svg class="i"><use href="#i-eye"/></svg></button>
           <button id="refreshBtn" class="icon-btn" data-tip="Refresh prices (R)" aria-label="Refresh prices"><svg class="i"><use href="#i-refresh"/></svg></button>
           <button id="exportBtn" class="icon-btn" data-tip="Download encrypted backup" aria-label="Download backup"><svg class="i"><use href="#i-download"/></svg></button>
           <button id="passBtn" class="icon-btn" data-tip="Change passphrase" aria-label="Change passphrase"><svg class="i"><use href="#i-key"/></svg></button>
@@ -220,7 +225,7 @@
       <footer class="footnote">
         <svg class="i"><use href="#i-shield"/></svg>
         <span>Encrypted in this browser with your passphrase (AES-256-GCM). Clearing site data deletes it, so <button class="link" id="footBackup">download a backup</button> now and then.</span>
-        <span class="shortcuts"><kbd>N</kbd> add · <kbd>R</kbd> refresh · <kbd>/</kbd> filter · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> tabs · <kbd>A</kbd> ask AI</span>
+        <span class="shortcuts"><kbd>N</kbd> add · <kbd>R</kbd> refresh · <kbd>H</kbd> hide numbers · <kbd>/</kbd> filter · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> tabs · <kbd>A</kbd> ask AI</span>
       </footer>
     </main>
 
