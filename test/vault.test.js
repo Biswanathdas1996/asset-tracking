@@ -36,6 +36,23 @@ test('each save uses a fresh IV', async () => {
   assert.notEqual(JSON.parse(storage.getItem(VAULT_KEY)).iv, a);
 });
 
+test('a refresh can reopen from the exported session until the vault is locked', async () => {
+  const storage = memoryStorage();
+  const v = createVault(storage);
+  await v.create('correct horse');
+  v.data.holdings.push({ _id: 'a', name: 'TCS' });
+  await v.save();
+  const session = await v.exportSession();
+
+  const refreshed = createVault(storage);
+  assert.equal(refreshed.unlocked, false);
+  await refreshed.resume(session);
+  assert.equal(refreshed.data.holdings[0].name, 'TCS');
+
+  await v.changePassphrase('different');
+  await assert.rejects(refreshed.resume(session), /Passphrase changed|Wrong passphrase/);
+});
+
 test('change passphrase, backup and restore', async () => {
   const storage = memoryStorage();
   const v = createVault(storage);

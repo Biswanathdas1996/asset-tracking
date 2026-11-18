@@ -53,15 +53,55 @@ export function parseShareholding(html) {
   return { ...out, asOf: first.quarter };
 }
 
+const validCode = (code) => /^[A-Z0-9&-]{1,20}$/.test(code);
+const inflight = new Map();
+
+/** One Screener company page, shared by the holding breakdown and the logo. */
+function companyPage(code) {
+  if (inflight.has(code)) return inflight.get(code);
+  const pending = cache.get(`html:${code}`, TTL, async () => {
+    try {
+      return await getText(`https://www.screener.in/company/${encodeURIComponent(code)}/`, { headers: { Accept: 'text/html' } });
+    } catch {
+      return null; // unlisted on Screener, ETF, or upstream hiccup
+    }
+  }).finally(() => inflight.delete(code));
+  inflight.set(code, pending);
+  return pending;
+}
+
+/** Square company mark from a Screener company page, or null when the page only has a placeholder. */
+export function parseLogo(html) {
+  const urls = [...String(html).matchAll(/https:\/\/cdn-media\.screener\.in\/company-logos\/[^"'\s>]+/gi)].map((m) => m[0]);
+  return urls.find((u) => !/\/dummy\./i.test(u) && /\.(webp|png|jpe?g)(\?|$)/i.test(u)) || null;
+}
+
 export function getShareholding(symbol) {
   const code = screenerCode(symbol);
-  if (!/^[A-Z0-9&-]{1,20}$/.test(code)) return Promise.resolve(null);
-  return cache.get(`s:${code}`, TTL, async () => {
+  if (!validCode(code)) return Promise.resolve(null);
+  return companyPage(code).then((html) => (html ? parseShareholding(html) : null));
+}
+
+/**
+ * Logo URL for a listed company. Screener's thumbnail first (a real square mark);
+ * Financial Modeling Prep's ticker image when Screener has none (some ETFs).
+ */
+export async function getLogoUrl(symbol) {
+  const code = screenerCode(symbol);
+  if (!validCode(code)) return null;
+  const html = await companyPage(code);
+  const fromPage = html ? parseLogo(html) : null;
+  if (fromPage) return fromPage;
+  const sym = /\.(NS|BO)$/i.test(String(symbol)) ? String(symbol).trim().toUpperCase() : `${code}.NS`;
+  if (!/^[A-Z0-9.&-]{1,24}$/.test(sym)) return null;
+  const url = `https://financialmodelingprep.com/image-stock/${encodeURIComponent(sym)}.png`;
+  return cache.get(`fmp:${sym}`, TTL, async () => {
     try {
-      const html = await getText(`https://www.screener.in/company/${encodeURIComponent(code)}/`, { headers: { Accept: 'text/html' } });
-      return parseShareholding(html);
+      const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(8000) });
+      const type = res.headers.get('content-type') || '';
+      return res.ok && type.startsWith('image/') ? url : null;
     } catch {
-      return null; // unlisted on Screener, ETF, or upstream hiccup: the card simply shows no line
+      return null;
     }
   });
 }

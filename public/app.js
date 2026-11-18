@@ -27,7 +27,7 @@ const META = {
   gold: { label: 'Gold SIP', noun: 'SIP', icon: 'gem', color: 'var(--gold)' },
 };
 const PRICE_STALE_MS = 60000;
-const IDLE_LOCK_MS = 15 * 60000;
+const SESSION_KEY = 'assetTracker.session.v1';
 
 const vault = createVault();
 const DEFAULT_SORT = { stock: { key: 'currentValue', dir: -1 }, crypto: { key: 'currentValue', dir: -1 }, gold: { key: 'currentValue', dir: -1 } };
@@ -105,7 +105,14 @@ $('#themeBtn').addEventListener('click', () => applyTheme({ system: 'light', lig
 applyTheme(theme);
 
 // ---------- rendering ----------
-const avatar = (text, color) => `<span class="avatar" style="--c:${color}">${esc(text)}</span>`;
+const companyLogo = (symbol) => (symbol ? `/api/logo/${encodeURIComponent(symbol)}` : '');
+const cryptoLogo = (r) => {
+  if (typeof r.image === 'string' && /^https:\/\/(?:coin-images|assets)\.coingecko\.com\//.test(r.image)) return r.image;
+  const id = r.coinId || r.id;
+  return id && /^[a-z0-9-]{1,80}$/i.test(id) ? `/api/crypto-logo/${encodeURIComponent(id)}` : '';
+};
+const avatar = (text, color, src = '') => `<span class="avatar${src ? ' has-img' : ''}" style="--c:${color}">${src ? `<img src="${esc(src)}" alt="" decoding="async" referrerpolicy="no-referrer" onload="this.parentElement.classList.add('ready')" onerror="this.parentElement.classList.remove('has-img');this.remove()">` : ''}<span class="av-fb" aria-hidden="true">${esc(text)}</span></span>`;
+const assetAvatar = (r, type) => avatar(assetInitials(r, type), META[type].color, type === 'stock' ? companyLogo(r.symbol) : type === 'crypto' ? cryptoLogo(r) : '');
 const assetInitials = (r, type) => (type === 'gold' ? 'Au' : shortSym(r.symbol).replace(/[^A-Z0-9]/gi, '').slice(0, type === 'crypto' ? 3 : 2).toUpperCase() || '?');
 
 let shownNet = null;
@@ -279,7 +286,7 @@ function stockTable(all, type) {
       ${th('currentPrice', 'Live price', true)}${th('dayChangePercent', 'Day', true)}${th('currentValue', 'Value', true)}${th('pnl', 'P&amp;L', true)}<th></th></tr></thead>
     <tbody>${rows.map((r) => `
       <tr${type === 'stock' ? ' class="has-ledger"' : ''}>
-        <td class="lead"><div class="asset">${avatar(assetInitials(r, type), c)}<div>
+        <td class="lead"><div class="asset">${assetAvatar(r, type)}<div>
           <div class="name">${esc(r.name)}</div>
           <div class="sub">${esc(shortSym(r.symbol))} · ${fmtDate(r.buyDate)}${r.notes ? ` · ${esc(r.notes)}` : ''}</div></div></div>${rowActions(r._id)}</td>
         <td class="num" data-label="Qty">${qty.format(r.quantity)}</td>
@@ -691,7 +698,7 @@ function newsHoldings() {
   const byKey = new Map();
   for (const h of d.holdings) {
     const key = h.assetType === 'crypto' ? (h.coinId || h.symbol) : h.symbol;
-    const e = byKey.get(key) || { key, assetType: h.assetType, symbol: h.symbol, name: h.name, dayChangePercent: h.dayChangePercent ?? null, value: 0 };
+    const e = byKey.get(key) || { key, assetType: h.assetType, symbol: h.symbol, coinId: h.coinId, name: h.name, dayChangePercent: h.dayChangePercent ?? null, value: 0 };
     e.value += h.currentValue ?? h.investedValue ?? 0;
     byKey.set(key, e);
   }
@@ -750,7 +757,7 @@ function newsLabels() {
   const map = new Map(newsHoldings().map((h) => [h.key, {
     label: h.assetType === 'gold' ? 'Gold' : shortSym(h.symbol) || h.name,
     name: h.name,
-    avatar: avatar(assetInitials(h, h.assetType), META[h.assetType].color),
+    avatar: assetAvatar(h, h.assetType),
   }]));
   map.set('market', { label: 'Market', name: 'Market-wide', avatar: `<span class="avatar" style="--c:var(--accent)">${icon('stock')}</span>` });
   return map;
@@ -924,7 +931,7 @@ function openForm(type, existing = null) {
   if (type === 'stock' || type === 'crypto') {
     $('#formTitle').textContent = `${existing ? 'Edit' : 'Add'} ${type === 'stock' ? 'stock' : 'crypto'} purchase`;
     html += existing
-      ? `<div class="picked">${avatar(assetInitials(existing, type), m.color)}<div class="grow"><b>${esc(existing.name)}</b><span>${esc(shortSym(existing.symbol))}</span></div></div>`
+      ? `<div class="picked">${assetAvatar(existing, type)}<div class="grow"><b>${esc(existing.name)}</b><span>${esc(shortSym(existing.symbol))}</span></div></div>`
       : `<div class="field"><label for="f-search">${type === 'stock' ? 'Stock' : 'Coin'}</label>
           <div class="search" style="width:100%;height:42px">${icon('search')}<input id="f-search" placeholder="${type === 'stock' ? 'Search Reliance, TCS, HDFC Bank…' : 'Search Bitcoin, ETH, Solana…'}" required autocomplete="off" role="combobox" aria-expanded="false" aria-controls="suggest" /></div>
           <div class="suggest" id="suggest" role="listbox" hidden></div></div>`;
@@ -974,7 +981,7 @@ function bindSearch() {
         const res = await api(`/search/${type === 'stock' ? 'stocks' : 'crypto'}?q=${encodeURIComponent(q)}`);
         if (search.value.trim() !== q) return;
         box.innerHTML = res.length
-          ? res.map((r, i) => `<button type="button" role="option" data-i="${i}" class="${i === 0 ? 'hl' : ''}">${avatar(assetInitials(r, type), META[type].color)}<span class="grow">${esc(r.name)}</span><span class="muted">${esc(shortSym(r.symbol))}${r.exchange ? ` · ${esc(r.exchange)}` : ''}</span></button>`).join('')
+          ? res.map((r, i) => `<button type="button" role="option" data-i="${i}" class="${i === 0 ? 'hl' : ''}">${assetAvatar(r, type)}<span class="grow">${esc(r.name)}</span><span class="muted">${esc(shortSym(r.symbol))}${r.exchange ? ` · ${esc(r.exchange)}` : ''}</span></button>`).join('')
           : '<div class="none">No matches</div>';
         box.hidden = false;
         search.setAttribute('aria-expanded', 'true');
@@ -1176,7 +1183,13 @@ document.addEventListener('keydown', (e) => {
 // ---------- lock screen / encrypted vault ----------
 let lockMode = 'unlock'; // 'create' | 'unlock' | 'restore'
 let restoreText = null;
-let lastActivity = Date.now();
+
+function clearSession() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* storage unavailable */ }
+}
+async function persistSession() {
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(await vault.exportSession())); } catch { /* storage unavailable */ }
+}
 
 function strengthScore(p) {
   if (!p) return 0;
@@ -1237,7 +1250,6 @@ function showLock(message = '') {
 function enterApp() {
   restoreText = null;
   state.errors = [];
-  lastActivity = Date.now();
   shownNet = null;
   chartAnimate = true;
   $('#lock').hidden = true;
@@ -1246,6 +1258,7 @@ function enterApp() {
 }
 
 function lockApp(message = '') {
+  clearSession();
   vault.lock();
   state.data = null;
   state.errors = [];
@@ -1280,6 +1293,7 @@ $('#lockForm').addEventListener('submit', async (e) => {
     if (lockMode === 'create') await vault.create(pass);
     else if (lockMode === 'restore') await vault.importBackup(restoreText, pass);
     else await vault.unlock(pass);
+    await persistSession();
     enterApp();
   } catch (err) {
     $('#lockError').textContent = err.message;
@@ -1303,6 +1317,7 @@ $('#cancelRestoreBtn').addEventListener('click', () => { restoreText = null; sho
 $('#resetBtn').addEventListener('click', async () => {
   if (!(await confirmDialog({ title: 'Erase all data?', text: 'This deletes the encrypted portfolio saved in this browser. It cannot be undone.', ok: 'Continue' }))) return;
   if (!(await confirmDialog({ title: 'Are you absolutely sure?', text: 'Without your passphrase or a backup, the data is gone for good.', ok: 'Erase everything' }))) return;
+  clearSession();
   vault.reset();
   showLock();
   toast('All data erased. Create a new vault to start again.');
@@ -1341,6 +1356,7 @@ $('#passForm').addEventListener('submit', async (e) => {
   try {
     await vault.unlock(cur); // verifies the current passphrase
     await vault.changePassphrase(next);
+    await persistSession();
     passDialog.close();
     toast('Passphrase changed. Download a new backup so it uses the new passphrase.', 'success', { label: 'Backup now', fn: exportBackup });
   } catch (err) {
@@ -1358,26 +1374,35 @@ window.addEventListener('storage', (e) => {
   vault.reload().then(() => { version++; render(); }).catch(() => lockApp('Your data was changed in another tab. Unlock again.'));
 });
 
-// Auto-lock after inactivity; otherwise keep prices fresh while the tab is visible.
-for (const ev of ['pointerdown', 'keydown', 'wheel', 'touchstart']) window.addEventListener(ev, () => { lastActivity = Date.now(); }, { passive: true });
+// Keep prices fresh while the tab is visible. The vault stays open across refresh until Lock is clicked.
 setInterval(() => {
-  if (!vault.unlocked) return;
-  if (Date.now() - lastActivity > IDLE_LOCK_MS) { lockApp('Locked after 15 minutes of inactivity.'); return; }
-  if (!dialog.open && document.visibilityState === 'visible') load().then(() => fetchNews());
+  if (!vault.unlocked || dialog.open || document.visibilityState !== 'visible') return;
+  load().then(() => fetchNews());
 }, 60000);
 setInterval(() => { if (vault.unlocked) renderStatus(); }, 20000);
-// Mobile browsers pause timers in the background: check on return so an idle vault locks straight away.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible' || !vault.unlocked) return;
-  if (Date.now() - lastActivity > IDLE_LOCK_MS) lockApp('Locked after 15 minutes of inactivity.');
-  else if (!dialog.open) load().then(() => fetchNews());
+  if (document.visibilityState !== 'visible' || !vault.unlocked || dialog.open) return;
+  load().then(() => fetchNews());
 });
+
+async function restoreSession() {
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch { saved = null; }
+  if (saved && vault.exists()) {
+    try {
+      await vault.resume(saved);
+      enterApp();
+      return;
+    } catch { clearSession(); }
+  }
+  showLock();
+}
 
 if (!globalThis.crypto?.subtle) {
   $('#lock').hidden = false;
   $('#lockForm').innerHTML = '<h1>Encryption unavailable</h1><p class="lock-intro">This browser can only encrypt data on a secure address. Open the app at <b>http://localhost</b> or over HTTPS.</p>';
 } else {
-  showLock();
+  restoreSession();
 }
 
 // ---------- AI chat assistant ----------

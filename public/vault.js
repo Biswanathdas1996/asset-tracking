@@ -3,7 +3,8 @@
  *
  * - Key: PBKDF2-SHA256 (600k iterations, random 16-byte salt) from the user's passphrase -> AES-GCM 256.
  * - Every save uses a fresh random 12-byte IV.
- * - The passphrase and key are kept only in memory; localStorage holds only ciphertext.
+ * - localStorage holds only ciphertext. The key stays in memory, and can be exported
+ *   for a tab session so a refresh stays unlocked until the user locks.
  */
 export const VAULT_KEY = 'assetTracker.vault.v1';
 const ITERATIONS = 600000;
@@ -26,7 +27,7 @@ async function deriveKey(passphrase, salt, iterations = ITERATIONS) {
     { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
     base,
     { name: 'AES-GCM', length: 256 },
-    false,
+    true,
     ['encrypt', 'decrypt'],
   );
 }
@@ -81,6 +82,27 @@ export function createVault(storage = globalThis.localStorage) {
       const k = await deriveKey(passphrase, s, b.iter);
       data = await decryptBlob(k, b);
       key = k; salt = s; iter = b.iter;
+    },
+
+    /** Raw key material for this tab. Kept in sessionStorage so a refresh stays unlocked. */
+    async exportSession() {
+      if (!key || !salt) throw new Error('Vault is locked');
+      const raw = new Uint8Array(await crypto.subtle.exportKey('raw', key));
+      return { k: toB64(raw), s: toB64(salt), i: iter };
+    },
+
+    /** Re-open from a previously exported session. Fails if the passphrase has since changed. */
+    async resume(session) {
+      if (!session || typeof session.k !== 'string' || typeof session.s !== 'string' || !Number.isInteger(session.i)) {
+        throw new Error('No saved session');
+      }
+      const raw = storage.getItem(VAULT_KEY);
+      if (!raw) throw new Error('No saved data found');
+      const b = parseBlob(raw);
+      if (b.salt !== session.s) throw new Error('Passphrase changed');
+      const k = await crypto.subtle.importKey('raw', fromB64(session.k), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+      data = await decryptBlob(k, b);
+      key = k; salt = fromB64(session.s); iter = session.i;
     },
 
     /** Re-read storage (e.g. another tab saved). Locks if the data can no longer be decrypted. */

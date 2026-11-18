@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseShareholding, screenerCode } from '../src/services/shareholding.js';
+import { parseShareholding, parseLogo, screenerCode } from '../src/services/shareholding.js';
 
 const html = `<div id="quarterly-shp"><table><thead><tr><th class="text"></th>
   <th data-date-key="2026-03-31">Mar 2026</th><th data-date-key="2026-06-30">Jun 2026</th><th data-date-key="2026-09-30">Sep 2026</th></tr></thead>
@@ -22,6 +22,13 @@ test('parses promoter / FII / DII / retail latest holding and quarter-on-quarter
 
 test('returns null when the page has no shareholding table', () => {
   assert.equal(parseShareholding('<html>nothing</html>'), null);
+});
+
+test('reads the company mark and skips Screener placeholders', () => {
+  const logo = 'https://cdn-media.screener.in/company-logos/thumbnails/d1b4fc4ed283e1d0a3a981c6.webp';
+  assert.equal(parseLogo(`<img src="${logo}" alt="">`), logo);
+  assert.equal(parseLogo('<img src="https://cdn-media.screener.in/company-logos/dummy.png" alt="">'), null);
+  assert.equal(parseLogo('<html>nothing</html>'), null);
 });
 
 test('maps Yahoo symbols to Screener codes', () => {

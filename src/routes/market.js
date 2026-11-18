@@ -31,6 +31,23 @@ r.get('/quote/crypto/:id', asyncRoute(async (req, res) => {
   res.json(out);
 }));
 
+// GET /api/logo/JPL.NS -> 302 to the company mark, or 404 when none is published.
+r.get('/logo/:symbol', asyncRoute(async (req, res) => {
+  const symbol = normalizeStockSymbol(req.params.symbol);
+  const url = await shareholding.getLogoUrl(symbol);
+  if (!url) return res.status(404).end();
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.redirect(302, url);
+}));
+
+// GET /api/crypto-logo/polygon-ecosystem-token -> 302 to the coin mark, or 404 when none is published.
+r.get('/crypto-logo/:id', asyncRoute(async (req, res) => {
+  const url = await coingecko.getCoinLogoUrl(req.params.id);
+  if (!url) return res.status(404).end();
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.redirect(302, url);
+}));
+
 // GET /api/shareholding?symbols=RELIANCE.NS,TCS.NS -> { [symbol]: { fii, dii, asOf } | null }
 r.get('/shareholding', asyncRoute(async (req, res) => {
   const symbols = String(req.query.symbols || '').split(',').map((s) => s.trim()).filter(Boolean);

@@ -5,7 +5,20 @@ import * as yahoo from './yahoo.js';
 
 const BASE = 'https://api.coingecko.com/api/v3';
 const cache = ttlCache();
+const LOGO_TTL = 12 * 3600 * 1000;
+const IMAGE_HOSTS = new Set(['coin-images.coingecko.com', 'assets.coingecko.com']);
 const headers = () => (config.coingeckoApiKey ? { 'x-cg-demo-api-key': config.coingeckoApiKey } : {});
+
+/** CoinGecko-hosted coin image, or null. Other hosts are dropped so a redirect cannot leave CoinGecko. */
+export function coinImageUrl(url) {
+  try {
+    const u = new URL(String(url || ''));
+    if (u.protocol !== 'https:' || !IMAGE_HOSTS.has(u.hostname)) return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
 
 export async function searchCoins(query) {
   const data = await getJson(`${BASE}/search?query=${encodeURIComponent(query)}`, { headers: headers() });
@@ -15,7 +28,25 @@ export async function searchCoins(query) {
     name: c.name,
     rank: c.market_cap_rank,
     thumb: c.thumb,
+    image: coinImageUrl(c.large) || coinImageUrl(c.thumb),
   }));
+}
+
+/** Square coin mark for a CoinGecko id (polygon-ecosystem-token, bitcoin, …). Cached, including misses. */
+export async function getCoinLogoUrl(id) {
+  const coinId = String(id || '').trim().toLowerCase();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(coinId)) return null;
+  return cache.get(`logo:${coinId}`, LOGO_TTL, async () => {
+    try {
+      const data = await getJson(
+        `${BASE}/coins/${encodeURIComponent(coinId)}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false&sparkline=false`,
+        { headers: headers() },
+      );
+      return coinImageUrl(data?.image?.small) || coinImageUrl(data?.image?.large) || coinImageUrl(data?.image?.thumb);
+    } catch {
+      return null;
+    }
+  });
 }
 
 /** Live INR prices for many coins in a single call. */
